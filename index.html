@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Duhové šachy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>window.Peer || document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');</script>
+<style>
+/* Rozvržení: šachovnice vlevo, panel hry vpravo; na telefonu pod sebou. */
+:root{
+  --bg:#fbf8ff;
+  --card:#ffffff;
+  --ink:#2a2340;
+  --muted:#6b6385;
+  --line:#e7e0f6;
+  --accent:#7b4dff;
+  --good:#1f9d55;
+  --bad:#e0365a;
+  --display:"Fredoka","Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,-apple-system,sans-serif;
+  --pieces:"Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Symbols","DejaVu Sans","Apple Symbols",serif;
+  --rainbow:linear-gradient(90deg,#ff4d4d,#ff9a3c,#ffd93c,#4cd964,#3cb4ff,#5a6bff,#b05cff);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
+  min-height:100vh;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 32px;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:6px;background:var(--rainbow);z-index:5}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+header{max-width:1080px;margin:0 auto;padding:28px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.logo{font-family:var(--display);font-weight:700;font-size:clamp(30px,6vw,46px);line-height:1;margin:0;letter-spacing:.01em;display:flex;align-items:center;gap:12px}
+.logo .w span{display:inline-block}
+.logo svg{width:52px;height:30px;flex:none}
+.home-btn{border:2px solid var(--line);background:var(--card);border-radius:999px;padding:6px 16px;font-weight:700;color:var(--muted)}
+.home-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- menu ---------- */
+.menu{max-width:760px;margin:12px auto 0;display:grid;gap:20px}
+.menu .lead{font-size:18px;color:var(--muted);margin:0;text-wrap:balance}
+.field{display:grid;gap:6px;max-width:360px}
+.field label{font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.field input{border:2px solid var(--line);border-radius:14px;padding:10px 14px;background:var(--card);font-size:18px}
+.field input:focus{border-color:var(--accent);outline:none}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.choice{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:20px;display:grid;gap:10px;align-content:start;text-align:left;position:relative;overflow:hidden}
+.choice h2{font-family:var(--display);font-size:22px;margin:0;font-weight:600}
+.choice p{margin:0;color:var(--muted)}
+.choice .stripe{position:absolute;inset:0 0 auto;height:8px}
+.big-btn{border:0;border-radius:14px;padding:12px 18px;font-weight:800;font-size:17px;color:#fff;background:var(--accent);box-shadow:0 4px 0 rgba(42,35,64,.25);transition:transform .08s}
+.big-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(42,35,64,.25)}
+.big-btn:disabled{opacity:.5;cursor:not-allowed}
+.join-row{display:flex;gap:8px;flex-wrap:wrap}
+.join-row input{flex:1 1 120px;min-width:0;border:2px solid var(--line);border-radius:14px;padding:10px 12px;font-size:20px;font-family:var(--display);letter-spacing:.2em;text-transform:uppercase}
+.err{color:var(--bad);font-weight:700;margin:0}
+
+/* ---------- game ---------- */
+.game{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:860px){.game{grid-template-columns:minmax(0,1fr)}}
+.board-wrap{display:grid;gap:10px;justify-items:center}
+.board{
+  --size:min(calc(100vw - 32px),76vh,620px);
+  width:var(--size);aspect-ratio:1;max-width:100%;
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  border-radius:18px;overflow:hidden;border:7px solid #fff;
+  box-shadow:0 0 0 3px var(--line),0 18px 40px -18px rgba(90,60,180,.45);
+  container-type:inline-size;user-select:none;-webkit-user-select:none;touch-action:manipulation;
+}
+.sq{position:relative;border:0;padding:0;margin:0;display:grid;place-items:center;min-width:0;min-height:0}
+.sq .coord{position:absolute;font:700 2.1cqi/1 var(--body);color:rgba(42,35,64,.55);pointer-events:none}
+.sq .coord.f{right:4%;bottom:3%}
+.sq .coord.r{left:5%;top:4%}
+.pc{font-family:var(--pieces);font-size:40px;font-size:10.2cqi;line-height:1;pointer-events:none;transition:transform .12s}
+.pc.w{color:#fff;-webkit-text-stroke:.35cqi #2a2340;text-shadow:0 .5cqi 0 rgba(42,35,64,.35)}
+.pc.b{color:#231b38;text-shadow:0 0 .5cqi rgba(255,255,255,.9),0 .5cqi 0 rgba(42,35,64,.3)}
+.pc.sm{font-size:inherit}
+.pc.sm.w{-webkit-text-stroke:1.2px #2a2340;text-shadow:0 1px 0 rgba(42,35,64,.35)}
+.pc.sm.b{text-shadow:0 0 2px rgba(255,255,255,.9)}
+.sq.last::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.42)}
+.sq.sel{box-shadow:inset 0 0 0 .9cqi #2a2340}
+.sq.sel .pc{transform:scale(1.12)}
+.sq.check{background-image:radial-gradient(circle,rgba(224,54,90,.95) 0 30%,rgba(224,54,90,0) 72%)!important}
+.sq .dot{position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(42,35,64,.38);pointer-events:none;z-index:1}
+.sq .ring{position:absolute;inset:6%;border-radius:50%;border:1.1cqi solid rgba(42,35,64,.42);pointer-events:none;z-index:1}
+.sq .pc{position:relative;z-index:2}
+.captured{min-height:28px;font-family:var(--pieces);font-size:24px;line-height:1;width:min(calc(100vw - 32px),76vh,620px);max-width:100%;display:flex;flex-wrap:wrap;gap:0 2px}
+
+.panel{display:grid;gap:16px;min-width:0}
+.card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:16px 18px;display:grid;gap:10px;min-width:0}
+.status{font-family:var(--display);font-weight:600;font-size:clamp(22px,3.4vw,30px);line-height:1.15;margin:0;text-wrap:balance}
+.status-sub{margin:0;color:var(--muted)}
+.label{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0}
+.players{display:grid;gap:8px}
+.player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:2px solid transparent}
+.player.turn{border-color:var(--accent);background:#f4efff}
+.player .chip{font-family:var(--pieces);font-size:28px;line-height:1;width:34px;text-align:center}
+.player .name{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.player .you{font-size:12px;font-weight:800;background:var(--ink);color:#fff;border-radius:999px;padding:2px 8px}
+.dot-on,.dot-off{width:10px;height:10px;border-radius:50%;flex:none}
+.dot-on{background:var(--good);box-shadow:0 0 0 3px rgba(31,157,85,.2)}
+.dot-off{background:#c9c2da}
+.share-link{display:flex;gap:8px;flex-wrap:wrap}
+.share-link input{flex:1 1 180px;min-width:0;border:2px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;background:var(--bg)}
+.local-note{margin:0;padding:10px 12px;border-radius:12px;background:#fff6db;border:2px solid #ffe08a;color:var(--ink);font-size:14px}
+.code{font-family:var(--display);font-weight:700;font-size:32px;letter-spacing:.22em;margin:0;background:var(--rainbow);-webkit-background-clip:text;background-clip:text;color:transparent}
+.small-btn{border:2px solid var(--line);background:var(--card);border-radius:12px;padding:8px 14px;font-weight:800}
+.small-btn:hover{border-color:var(--accent);color:var(--accent)}
+.small-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.small-btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.net-msg{margin:0;font-weight:700;color:var(--bad)}
+.moves{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:2.4em 1fr 1fr;gap:2px 8px;max-height:220px;overflow:auto;font-variant-numeric:tabular-nums}
+.moves .n{color:var(--muted);text-align:right}
+.moves .g{font-family:var(--pieces);font-size:1.15em}
+.empty{color:var(--muted);margin:0}
+
+/* promotion */
+.overlay{position:fixed;inset:0;background:rgba(42,35,64,.45);display:grid;place-items:center;z-index:20;padding:16px}
+.promo{background:var(--card);border-radius:22px;padding:20px;display:grid;gap:12px;text-align:center}
+.promo h3{margin:0;font-family:var(--display);font-weight:600;font-size:22px}
+.promo-row{display:flex;gap:10px}
+.promo-row button{width:72px;height:72px;border-radius:16px;border:2px solid var(--line);background:var(--bg);font-family:var(--pieces);font-size:48px;line-height:1}
+.promo-row button:hover{border-color:var(--accent)}
+
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:30}
+@media (prefers-reduced-motion:reduce){.pc,.big-btn{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="logo">
+    <svg viewBox="0 0 52 30" aria-hidden="true">
+      <g fill="none" stroke-width="3.2" stroke-linecap="round">
+        <path d="M4 28a22 22 0 0 1 44 0" stroke="#ff4d4d"/><path d="M7.5 28a18.5 18.5 0 0 1 37 0" stroke="#ff9a3c"/>
+        <path d="M11 28a15 15 0 0 1 30 0" stroke="#ffd93c"/><path d="M14.5 28a11.5 11.5 0 0 1 23 0" stroke="#4cd964"/>
+        <path d="M18 28a8 8 0 0 1 16 0" stroke="#3cb4ff"/><path d="M21.5 28a4.5 4.5 0 0 1 9 0" stroke="#7b4dff"/>
+      </g>
+    </svg>
+    <span class="w" id="logoText">Duhové šachy</span>
+  </h1>
+  <button class="home-btn" id="homeBtn" hidden>← Menu</button>
+</header>
+
+<!-- MENU -->
+<section class="menu" id="menu">
+  <p class="lead">Šachy pro dva hráče. Založ hru, pošli kamarádovi odkaz a hrajte každý na svém počítači nebo tabletu.</p>
+  <div class="field">
+    <label for="nameInput">Tvoje jméno</label>
+    <input id="nameInput" maxlength="20" placeholder="Např. Ema" autocomplete="off">
+  </div>
+  <div class="choices">
+    <div class="choice">
+      <span class="stripe" style="background:linear-gradient(90deg,#ff4d4d,#ff9a3c)"></span>
+      <h2>Založit hru</h2>
+      <p>Dostaneš odkaz a kód. Pošli je kamarádovi.</p>
+      <button class="big-btn" id="hostBtn" style="background:#ff6a3c">Založit hru</button>
+    </div>
+    <div class="choice">
+      <span class="stripe" style="background:linear-gradient(90deg,#4cd964,#3cb4ff)"></span>
+      <h2>Připojit se</h2>
+      <p>Máš od kamaráda kód? Napiš ho sem.</p>
+      <div class="join-row">
+        <input id="codeInput" maxlength="5" placeholder="KÓD" autocomplete="off" aria-label="Kód hry">
+        <button class="big-btn" id="joinBtn" style="background:#2a9df4">Hrát</button>
+      </div>
+      <p class="err" id="joinErr" hidden></p>
+    </div>
+    <div class="choice">
+      <span class="stripe" style="background:linear-gradient(90deg,#5a6bff,#b05cff)"></span>
+      <h2>Na jednom zařízení</h2>
+      <p>Oba hráči u jednoho počítače, střídáte se.</p>
+      <button class="big-btn" id="localBtn">Hrát spolu</button>
+    </div>
+  </div>
+  <p class="err" id="noNet" hidden>Hra přes internet teď nejde (chybí připojení k internetu). Hra na jednom zařízení funguje.</p>
+</section>
+
+<!-- GAME -->
+<section class="game" id="game" hidden>
+  <div class="board-wrap">
+    <div class="captured" id="capTop" aria-label="Sebrané figurky"></div>
+    <div class="board" id="board" role="grid" aria-label="Šachovnice"></div>
+    <div class="captured" id="capBottom" aria-label="Sebrané figurky"></div>
+  </div>
+  <div class="panel">
+    <div class="card">
+      <p class="status" id="status">Na tahu je bílý</p>
+      <p class="status-sub" id="statusSub" hidden></p>
+      <p class="net-msg" id="netMsg" hidden></p>
+    </div>
+
+    <div class="card" id="shareCard" hidden>
+      <p class="label">Pozvi kamaráda</p>
+      <div class="share-link" id="shareLinkRow">
+        <input id="shareLink" readonly aria-label="Odkaz na hru">
+        <button class="small-btn primary" id="copyBtn">Kopírovat odkaz</button>
+      </div>
+      <p class="local-note" id="localNote" hidden>Hra je otevřená jako soubor z tohoto počítače, a proto zatím nemá odkaz ke sdílení. Odkaz se objeví, až hru nahrajete na internet (např. GitHub Pages nebo Netlify). Do té doby může kamarád otevřít stejný soubor u sebe, kliknout na <b>Připojit se</b> a napsat tento kód:</p>
+      <p class="status-sub" id="codeHint" style="margin:0">Nebo mu řekni kód hry:</p>
+      <p class="code" id="codeShow"></p>
+    </div>
+
+    <div class="card">
+      <p class="label">Hráči</p>
+      <div class="players" id="players"></div>
+      <p class="status-sub" id="spectators" hidden></p>
+      <div class="btn-row">
+        <button class="small-btn" id="newBtn">Nová hra</button>
+        <button class="small-btn" id="flipBtn">Otočit šachovnici</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Tahy</p>
+      <ol class="moves" id="moves"></ol>
+      <p class="empty" id="movesEmpty">Zatím se netáhlo. Bílý začíná.</p>
+    </div>
+  </div>
+</section>
+
+<div class="overlay" id="promoOverlay" hidden>
+  <div class="promo" role="dialog" aria-label="Proměna pěšce">
+    <h3>Na co se pěšec promění?</h3>
+    <div class="promo-row" id="promoRow"></div>
+    <button class="small-btn" id="promoCancel">Zpět</button>
+  </div>
+</div>
+<canvas id="confetti" hidden></canvas>
+
+<script>
+/*ENGINE-START*/
+// Šachová pravidla. Pole 0 = a8, 63 = h1. Figurka = barva + typ, např. "wK", "bP".
+const FILES = 'abcdefgh';
+const KN = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+const KG = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+const DIAG = [[-1,-1],[-1,1],[1,-1],[1,1]];
+const ORTH = [[-1,0],[1,0],[0,-1],[0,1]];
+function sqName(i){ return FILES[i & 7] + (8 - (i >> 3)); }
+function onB(r, f){ return r >= 0 && r < 8 && f >= 0 && f < 8; }
+function initialState(){
+  const b = Array(64).fill(null), back = 'RNBQKBNR';
+  for (let f = 0; f < 8; f++){ b[f] = 'b' + back[f]; b[8+f] = 'bP'; b[48+f] = 'wP'; b[56+f] = 'w' + back[f]; }
+  return { board: b, turn: 'w', castle: { wK: true, wQ: true, bK: true, bQ: true }, ep: -1, half: 0, full: 1, captured: null };
+}
+function attacked(b, sq, by){
+  const r = sq >> 3, f = sq & 7;
+  const pr = by === 'w' ? r + 1 : r - 1;
+  for (const df of [-1, 1]) if (onB(pr, f+df) && b[pr*8+f+df] === by + 'P') return true;
+  for (const [dr, df] of KN){ const rr = r+dr, ff = f+df; if (onB(rr, ff) && b[rr*8+ff] === by + 'N') return true; }
+  for (const [dr, df] of KG){ const rr = r+dr, ff = f+df; if (onB(rr, ff) && b[rr*8+ff] === by + 'K') return true; }
+  for (const [dirs, a, c] of [[DIAG, 'B', 'Q'], [ORTH, 'R', 'Q']]){
+    for (const [dr, df] of dirs){
+      let rr = r+dr, ff = f+df;
+      while (onB(rr, ff)){
+        const p = b[rr*8+ff];
+        if (p){ if (p[0] === by && (p[1] === a || p[1] === c)) return true; break; }
+        rr += dr; ff += df;
+      }
+    }
+  }
+  return false;
+}
+function kingSq(b, c){ return b.indexOf(c + 'K'); }
+function opp(c){ return c === 'w' ? 'b' : 'w'; }
+function inCheck(s, c){ return attacked(s.board, kingSq(s.board, c), opp(c)); }
+function pseudoMoves(s){
+  const b = s.board, c = s.turn, o = opp(c), ms = [];
+  for (let i = 0; i < 64; i++){
+    const p = b[i]; if (!p || p[0] !== c) continue;
+    const r = i >> 3, f = i & 7, t = p[1];
+    if (t === 'P'){
+      const d = c === 'w' ? -1 : 1, start = c === 'w' ? 6 : 1, last = c === 'w' ? 0 : 7;
+      const add = (to, flag) => {
+        if ((to >> 3) === last){ for (const pr of 'QRBN') ms.push({ from: i, to, promo: pr, flag }); }
+        else ms.push({ from: i, to, flag });
+      };
+      const r1 = r + d;
+      if (onB(r1, f) && !b[r1*8+f]){
+        add(r1*8+f);
+        if (r === start && !b[(r+2*d)*8+f]) ms.push({ from: i, to: (r+2*d)*8+f, flag: 'double' });
+      }
+      for (const df of [-1, 1]){
+        if (!onB(r1, f+df)) continue;
+        const to = r1*8+f+df;
+        if (b[to] && b[to][0] === o) add(to);
+        else if (to === s.ep) ms.push({ from: i, to, flag: 'ep' });
+      }
+    } else if (t === 'N' || t === 'K'){
+      for (const [dr, df] of (t === 'N' ? KN : KG)){
+        const rr = r+dr, ff = f+df; if (!onB(rr, ff)) continue;
+        const to = rr*8+ff; if (!b[to] || b[to][0] === o) ms.push({ from: i, to });
+      }
+      if (t === 'K' && i === (c === 'w' ? 60 : 4) && !attacked(b, i, o)){
+        if (s.castle[c+'K'] && !b[i+1] && !b[i+2] && b[i+3] === c+'R' && !attacked(b, i+1, o) && !attacked(b, i+2, o))
+          ms.push({ from: i, to: i+2, flag: 'castle' });
+        if (s.castle[c+'Q'] && !b[i-1] && !b[i-2] && !b[i-3] && b[i-4] === c+'R' && !attacked(b, i-1, o) && !attacked(b, i-2, o))
+          ms.push({ from: i, to: i-2, flag: 'castle' });
+      }
+    } else {
+      const dirs = t === 'B' ? DIAG : t === 'R' ? ORTH : DIAG.concat(ORTH);
+      for (const [dr, df] of dirs){
+        let rr = r+dr, ff = f+df;
+        while (onB(rr, ff)){
+          const to = rr*8+ff;
+          if (!b[to]) ms.push({ from: i, to });
+          else { if (b[to][0] === o) ms.push({ from: i, to }); break; }
+          rr += dr; ff += df;
+        }
+      }
+    }
+  }
+  return ms;
+}
+function applyMove(s, m){
+  const b = s.board.slice(), p = b[m.from], c = s.turn;
+  let captured = b[m.to];
+  b[m.to] = m.promo ? c + m.promo : p; b[m.from] = null;
+  if (m.flag === 'ep'){ const cap = m.to + (c === 'w' ? 8 : -8); captured = b[cap]; b[cap] = null; }
+  if (m.flag === 'castle'){
+    if (m.to > m.from){ b[m.from+1] = b[m.from+3]; b[m.from+3] = null; }
+    else { b[m.from-1] = b[m.from-4]; b[m.from-4] = null; }
+  }
+  const cs = Object.assign({}, s.castle);
+  if (p[1] === 'K'){ cs[c+'K'] = false; cs[c+'Q'] = false; }
+  for (const [sq, k] of [[63,'wK'],[56,'wQ'],[7,'bK'],[0,'bQ']]) if (m.from === sq || m.to === sq) cs[k] = false;
+  return {
+    board: b, turn: opp(c), castle: cs,
+    ep: m.flag === 'double' ? (m.from + m.to) / 2 : -1,
+    half: (p[1] === 'P' || captured) ? 0 : s.half + 1,
+    full: s.full + (c === 'b' ? 1 : 0),
+    captured: captured || null
+  };
+}
+function legalMoves(s){
+  return pseudoMoves(s).filter(m => { const n = applyMove(s, m); return !attacked(n.board, kingSq(n.board, s.turn), n.turn); });
+}
+function insufficient(b){
+  const rest = b.filter(p => p && p[1] !== 'K');
+  return rest.length === 0 || (rest.length === 1 && (rest[0][1] === 'B' || rest[0][1] === 'N'));
+}
+function gameStatus(s){
+  const chk = inCheck(s, s.turn);
+  if (legalMoves(s).length === 0) return chk ? 'mate' : 'stalemate';
+  if (insufficient(s.board)) return 'material';
+  if (s.half >= 100) return 'fifty';
+  return chk ? 'check' : 'play';
+}
+/*ENGINE-END*/
+
+/* ---------------- aplikace ---------------- */
+const $ = s => document.querySelector(s);
+const OUTLINE = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' };
+const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
+const VS = '︎';
+const NAME_CZ = { K: 'král', Q: 'dáma', R: 'věž', B: 'střelec', N: 'jezdec', P: 'pěšec' };
+const PREFIX = 'duhove-sachy-v1-';
+const ALPHA = 'abcdefghjkmnpqrstuvwxyz23456789';
+const ONLINE_OK = typeof Peer !== 'undefined';
+
+const LS = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+function rand(n){ let s = ''; const a = new Uint32Array(n); crypto.getRandomValues(a); for (const x of a) s += ALPHA[x % ALPHA.length]; return s; }
+const clientId = LS.get('ds-client', null) || (() => { const id = rand(14); LS.set('ds-client', id); return id; })();
+let myName = LS.get('ds-name', '');
+
+const G = { mode: 'menu', role: null, code: null, gameId: 1, moves: [], hostColor: 'w',
+            names: { host: '', guest: '' }, opponentId: null, opponentOnline: false, spectators: 0 };
+let states = [initialState()];
+let selected = -1, flipped = false, pendingPromo = null, netMsg = '', newConfirm = false, lastCelebrated = '';
+const net = { peer: null, conns: new Map(), hostConn: null, retry: null };
+
+const cur = () => states[states.length - 1];
+function myColor(){
+  if (G.mode === 'local') return cur().turn;
+  if (G.role === 'host') return G.hostColor;
+  if (G.role === 'guest') return opp(G.hostColor);
+  return null;
+}
+function setMoves(moves){
+  const st = [initialState()];
+  for (const m of moves){
+    const s = st[st.length-1];
+    const lm = legalMoves(s).find(x => x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null));
+    if (!lm) return false;
+    st.push(applyMove(s, lm));
+  }
+  states = st;
+  G.moves = moves.map(m => ({ from: m.from, to: m.to, promo: m.promo || null }));
+  return true;
+}
+function colorName(c){ return c === 'w' ? 'bílý' : 'černý'; }
+function playerName(c){
+  if (G.mode === 'local') return c === 'w' ? 'Bílý' : 'Černý';
+  const n = c === G.hostColor ? G.names.host : G.names.guest;
+  return n || (c === G.hostColor ? 'Hráč 1' : (G.opponentId || G.role === 'guest' ? 'Hráč 2' : 'Čeká se na kamaráda…'));
+}
+
+/* ---------- vykreslení ---------- */
+function squareColor(i){
+  const r = i >> 3, f = i & 7;
+  const hue = Math.round(((f + (7 - r)) / 14) * 290);   // duha po úhlopříčkách: červená → fialová
+  const light = (r + f) % 2 === 0;
+  return light ? `hsl(${hue} 95% 88%)` : `hsl(${hue} 70% 58%)`;
+}
+function render(){
+  const s = cur(), st = gameStatus(s);
+  const mine = myColor();
+  const flip = G.mode === 'local' ? flipped : (mine === 'b') !== flipped;
+  const targets = selected >= 0 ? legalMoves(s).filter(m => m.from === selected).map(m => m.to) : [];
+  const last = G.moves[G.moves.length - 1];
+  const ck = (st === 'check' || st === 'mate') ? kingSq(s.board, s.turn) : -1;
+
+  const board = $('#board'); board.innerHTML = '';
+  for (let k = 0; k < 64; k++){
+    const i = flip ? 63 - k : k, p = s.board[i];
+    const el = document.createElement('button');
+    el.className = 'sq'; el.style.background = squareColor(i); el.dataset.sq = i;
+    el.setAttribute('aria-label', sqName(i) + (p ? ' ' + colorName(p[0]) + ' ' + NAME_CZ[p[1]] : ''));
+    if (last && (i === last.from || i === last.to)) el.classList.add('last');
+    if (i === selected) el.classList.add('sel');
+    if (i === ck) el.classList.add('check');
+    const col = k & 7, row = k >> 3;
+    if (row === 7) el.insertAdjacentHTML('beforeend', `<span class="coord f">${FILES[i & 7]}</span>`);
+    if (col === 0) el.insertAdjacentHTML('beforeend', `<span class="coord r">${8 - (i >> 3)}</span>`);
+    if (targets.includes(i)) el.insertAdjacentHTML('beforeend', p || i === s.ep ? '<span class="ring"></span>' : '<span class="dot"></span>');
+    if (p) el.insertAdjacentHTML('beforeend', `<span class="pc ${p[0]}">${GLYPH[p[1]]}${VS}</span>`);
+    board.appendChild(el);
+  }
+
+  // sebrané figurky
+  const cap = { w: [], b: [] };
+  for (const x of states) if (x.captured) cap[x.captured[0]].push(x.captured[1]);
+  const order = 'QRBNP';
+  const capHtml = c => cap[c].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(t => `<span class="pc sm ${c}">${GLYPH[t]}${VS}</span>`).join('');
+  const bottomColor = flip ? 'b' : 'w';
+  $('#capBottom').innerHTML = capHtml(opp(bottomColor));   // co sebral hráč dole
+  $('#capTop').innerHTML = capHtml(bottomColor);
+
+  // stav
+  let text, sub = '';
+  if (st === 'mate'){
+    const winner = opp(s.turn);
+    text = G.mode === 'online' && mine ? (winner === mine ? 'Šach mat! Vyhrál jsi! 🎉' : 'Šach mat. Tentokrát vyhrál soupeř.') : `Šach mat! Vyhrává ${colorName(winner)}. 🎉`;
+    sub = 'Hru můžete začít znovu tlačítkem Nová hra.';
+  } else if (st === 'stalemate'){ text = 'Pat – remíza!'; sub = 'Hráč na tahu nemůže táhnout, ale není v šachu.'; }
+  else if (st === 'material'){ text = 'Remíza!'; sub = 'Na šachovnici nezbylo dost figurek, aby někdo mohl dát mat.'; }
+  else if (st === 'fifty'){ text = 'Remíza!'; sub = '50 tahů bez braní a bez tahu pěšcem.'; }
+  else {
+    if (G.mode === 'online' && G.role === 'spectator') text = `Na tahu je ${colorName(s.turn)}`;
+    else if (G.mode === 'online') text = s.turn === mine ? 'Jsi na tahu!' : 'Čeká se na tah soupeře…';
+    else text = `Na tahu je ${colorName(s.turn)}`;
+    if (st === 'check') { text = 'Šach! ' + text; sub = 'Král je v ohrožení. Musíš ho zachránit.'; }
+    if (G.mode === 'online' && G.role === 'spectator') sub = 'Díváš se na hru. Hrát mohou jen dva hráči.';
+  }
+  $('#status').textContent = text;
+  $('#statusSub').textContent = sub; $('#statusSub').hidden = !sub;
+  $('#netMsg').textContent = netMsg; $('#netMsg').hidden = !netMsg;
+
+  // hráči
+  const pl = $('#players'); pl.innerHTML = '';
+  for (const c of ['w', 'b']){
+    const row = document.createElement('div');
+    row.className = 'player' + (s.turn === c && st !== 'mate' && st !== 'stalemate' ? ' turn' : '');
+    const chip = document.createElement('span'); chip.className = 'chip';
+    chip.innerHTML = `<span class="pc sm ${c}" style="font-size:28px">${GLYPH.K}${VS}</span>`;
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = playerName(c);
+    row.append(chip, name);
+    if (G.mode === 'online'){
+      if (c === mine){ const y = document.createElement('span'); y.className = 'you'; y.textContent = 'ty'; row.append(y); }
+      else {
+        const isHostSide = c === G.hostColor;
+        const online = G.role === 'host' ? G.opponentOnline : (isHostSide ? G.opponentOnline : (G.role === 'spectator' ? true : true));
+        const d = document.createElement('span'); d.className = online ? 'dot-on' : 'dot-off';
+        d.title = online ? 'Připojen' : 'Nepřipojen'; row.append(d);
+      }
+    }
+    pl.append(row);
+  }
+  const specEl = $('#spectators');
+  specEl.hidden = !(G.mode === 'online' && G.role === 'host' && G.spectators > 0);
+  specEl.textContent = `Diváci: ${G.spectators}`;
+
+  // sdílení
+  const showShare = G.mode === 'online' && G.role === 'host';
+  $('#shareCard').hidden = !showShare;
+  if (showShare){
+    const link = shareLink();
+    $('#shareLinkRow').hidden = !link;
+    $('#localNote').hidden = !!link;
+    $('#codeHint').hidden = !link;
+    $('#shareLink').value = link;
+    $('#codeShow').textContent = G.code.toUpperCase();
+  }
+
+  // tlačítka
+  const nb = $('#newBtn');
+  nb.hidden = G.mode === 'online' && G.role === 'spectator';
+  nb.textContent = newConfirm ? 'Opravdu? Klikni znovu' : 'Nová hra';
+  nb.className = 'small-btn' + (newConfirm ? ' danger' : '');
+
+  // tahy
+  const ml = $('#moves'); ml.innerHTML = '';
+  for (let n = 0; n < G.moves.length; n += 2){
+    ml.insertAdjacentHTML('beforeend', `<li class="n">${n/2 + 1}.</li>`);
+    for (const j of [n, n+1]){
+      const li = document.createElement('li');
+      if (j < G.moves.length){
+        const m = G.moves[j], before = states[j].board, p = before[m.from], after = states[j+1];
+        const take = after.captured ? '×' : '–';
+        const castle = p[1] === 'K' && Math.abs(m.to - m.from) === 2 ? (m.to > m.from ? 'O-O' : 'O-O-O') : null;
+        const G2 = p[0] === 'w' ? OUTLINE : GLYPH;
+        li.innerHTML = `<span class="g">${G2[p[1]]}${VS}</span> ` +
+          (castle || sqName(m.from) + take + sqName(m.to) + (m.promo ? '=' + G2[m.promo] + VS : ''));
+      }
+      ml.appendChild(li);
+    }
+  }
+  ml.scrollTop = ml.scrollHeight;
+  $('#movesEmpty').hidden = G.moves.length > 0;
+
+  const iWon = G.mode !== 'online' || !mine || opp(s.turn) === mine;
+  if (st === 'mate' && iWon && lastCelebrated !== G.gameId + ':' + G.moves.length){
+    lastCelebrated = G.gameId + ':' + G.moves.length;
+    confetti();
+  }
+}
+
+/* ---------- ovládání šachovnice ---------- */
+function canMoveNow(){
+  const s = cur(), st = gameStatus(s);
+  if (st !== 'play' && st !== 'check') return false;
+  if (G.mode === 'local') return true;
+  if (G.role === 'spectator') return false;
+  return s.turn === myColor();
+}
+$('#board').addEventListener('click', e => {
+  const el = e.target.closest('.sq'); if (!el) return;
+  const i = +el.dataset.sq, s = cur(), p = s.board[i];
+  if (!canMoveNow()){ selected = -1; render(); return; }
+  if (selected >= 0){
+    const cands = legalMoves(s).filter(m => m.from === selected && m.to === i);
+    if (cands.length){
+      if (cands.length > 1){ pendingPromo = cands; showPromo(s.turn); return; }
+      return makeMove(cands[0]);
+    }
+  }
+  if (p && p[0] === s.turn && legalMoves(s).some(m => m.from === i)) selected = i === selected ? -1 : i;
+  else selected = -1;
+  render();
+});
+function showPromo(c){
+  const row = $('#promoRow'); row.innerHTML = '';
+  for (const t of 'QRBN'){
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="pc sm ${c}" style="font-size:48px">${GLYPH[t]}${VS}</span>`;
+    b.setAttribute('aria-label', NAME_CZ[t]);
+    b.onclick = () => { const m = pendingPromo.find(x => x.promo === t); $('#promoOverlay').hidden = true; pendingPromo = null; makeMove(m); };
+    row.appendChild(b);
+  }
+  $('#promoOverlay').hidden = false;
+}
+$('#promoCancel').onclick = () => { $('#promoOverlay').hidden = true; pendingPromo = null; selected = -1; render(); };
+
+function makeMove(m){
+  states.push(applyMove(cur(), m));
+  G.moves.push({ from: m.from, to: m.to, promo: m.promo || null });
+  selected = -1; newConfirm = false;
+  if (G.mode === 'local') saveLocal();
+  if (G.mode === 'online'){
+    if (G.role === 'host'){ saveHost(); broadcast(); }
+    else if (G.role === 'guest' && net.hostConn && net.hostConn.open){
+      net.hostConn.send({ t: 'move', gameId: G.gameId, n: G.moves.length - 1, m: G.moves[G.moves.length - 1] });
+    }
+  }
+  render();
+}
+
+$('#newBtn').onclick = () => {
+  if (G.moves.length && gameStatus(cur()) !== 'mate' && !newConfirm){ newConfirm = true; render(); setTimeout(() => { newConfirm = false; render(); }, 4000); return; }
+  newConfirm = false;
+  if (G.mode === 'online' && G.role === 'guest'){ net.hostConn && net.hostConn.open && net.hostConn.send({ t: 'newgame' }); return; }
+  newGame();
+};
+function newGame(){
+  states = [initialState()]; G.moves = []; selected = -1; G.gameId++;
+  if (G.mode === 'online' && G.role === 'host'){ G.hostColor = opp(G.hostColor); saveHost(); broadcast(); }
+  if (G.mode === 'local') saveLocal();
+  render();
+}
+$('#flipBtn').onclick = () => { flipped = !flipped; render(); };
+
+/* ---------- uložení ---------- */
+function saveHost(){ LS.set('ds-game-' + G.code, { role: 'host', gameId: G.gameId, moves: G.moves, hostColor: G.hostColor, names: G.names, opponentId: G.opponentId }); }
+function saveLocal(){ LS.set('ds-local', { moves: G.moves }); }
+
+/* ---------- síť (PeerJS) ---------- */
+function peerOpts(){ return Object.assign({ debug: 0 }, window.DS_PEER_OPTS || {}); }
+function shareLink(){
+  if (!/^https?:$/.test(location.protocol)) return '';
+  return location.origin + location.pathname + '?hra=' + G.code.toUpperCase();
+}
+function setNet(msg){ netMsg = msg; render(); }
+function syncFor(conn){
+  return { t: 'sync', gameId: G.gameId, moves: G.moves, hostColor: G.hostColor, names: G.names,
+           role: conn._client === G.opponentId ? 'player' : 'spectator' };
+}
+function broadcast(){ for (const c of net.conns.values()) if (c.open && c._client) c.send(syncFor(c)); }
+function updatePresence(){
+  let opOnline = false, spec = 0;
+  for (const c of net.conns.values()){ if (!c.open || !c._client) continue; if (c._client === G.opponentId) opOnline = true; else spec++; }
+  G.opponentOnline = opOnline; G.spectators = spec;
+}
+function startHost(code){
+  G.mode = 'online'; G.role = 'host'; G.code = code;
+  const saved = LS.get('ds-game-' + code, null);
+  if (saved){ G.gameId = saved.gameId; G.hostColor = saved.hostColor; G.names = saved.names || G.names; G.opponentId = saved.opponentId; setMoves(saved.moves || []); }
+  G.names.host = myName || G.names.host;
+  saveHost(); showGame();
+  if (!ONLINE_OK){ setNet('Bez internetu se kamarád nepřipojí.'); return; }
+  netMsg = 'Připojuji se…'; render();
+  const peer = net.peer = new Peer(PREFIX + code, peerOpts());
+  peer.on('open', () => setNet(''));
+  peer.on('connection', conn => {
+    conn.on('open', () => net.conns.set(conn.peer, conn));
+    conn.on('data', d => hostOnData(conn, d));
+    conn.on('close', () => { net.conns.delete(conn.peer); updatePresence(); render(); });
+    conn.on('error', () => {});
+  });
+  peer.on('disconnected', () => { setTimeout(() => { if (!peer.destroyed) try { peer.reconnect(); } catch(e){} }, 2000); });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id') setNet('Tahle hra je už otevřená v jiném okně. Zavři ho, nebo založ novou hru.');
+    else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) setNet('Výpadek připojení k internetu. Zkouším to znovu…');
+  });
+}
+function hostOnData(conn, d){
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'hello' && typeof d.clientId === 'string'){
+    conn._client = d.clientId.slice(0, 40);
+    net.conns.set(conn.peer, conn);
+    if (!G.opponentId || G.opponentId === conn._client){
+      G.opponentId = conn._client;
+      G.names.guest = String(d.name || '').slice(0, 20);
+    }
+    updatePresence(); saveHost(); broadcast(); render();
+  } else if (d.t === 'move' && conn._client === G.opponentId){
+    const s = cur(), guestColor = opp(G.hostColor);
+    const m = d.m || {};
+    const lm = d.gameId === G.gameId && d.n === G.moves.length && s.turn === guestColor &&
+      legalMoves(s).find(x => x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null));
+    if (lm){ states.push(applyMove(s, lm)); G.moves.push({ from: lm.from, to: lm.to, promo: lm.promo || null }); selected = -1; saveHost(); broadcast(); render(); }
+    else conn.send(syncFor(conn));
+  } else if (d.t === 'newgame' && conn._client === G.opponentId){
+    newGame();
+  }
+}
+function startGuest(code){
+  G.mode = 'online'; G.role = 'guest'; G.code = code;
+  showGame();
+  if (!ONLINE_OK){ setNet('Pro hru přes internet je potřeba připojení k internetu.'); return; }
+  netMsg = 'Připojuji se ke hře ' + code.toUpperCase() + '…'; render();
+  const peer = net.peer = new Peer(peerOpts());
+  const connect = () => {
+    clearTimeout(net.retry);
+    if (peer.destroyed) return;
+    if (peer.disconnected){ try { peer.reconnect(); } catch(e){} net.retry = setTimeout(connect, 3000); return; }
+    const conn = peer.connect(PREFIX + code, { reliable: true });
+    conn.on('open', () => {
+      net.hostConn = conn; G.opponentOnline = true;
+      conn.send({ t: 'hello', clientId, name: myName });
+      setNet('');
+    });
+    conn.on('data', guestOnData);
+    conn.on('close', () => {
+      if (net.hostConn === conn) net.hostConn = null;
+      G.opponentOnline = false;
+      setNet('Spojení se soupeřem se přerušilo. Zkouším to znovu…');
+      net.retry = setTimeout(connect, 3000);
+    });
+    conn.on('error', () => {});
+  };
+  net.connect = connect;
+  peer.on('open', connect);
+  peer.on('disconnected', () => { setTimeout(() => { if (!peer.destroyed) try { peer.reconnect(); } catch(e){} }, 2000); });
+  peer.on('error', e => {
+    if (e.type === 'peer-unavailable'){
+      setNet('Hra ' + code.toUpperCase() + ' teď není otevřená. Zkontroluj kód, nebo počkej, až ji kamarád otevře. Zkouším to znovu…');
+      net.retry = setTimeout(connect, 4000);
+    } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)){
+      setNet('Výpadek připojení k internetu. Zkouším to znovu…');
+      net.retry = setTimeout(connect, 4000);
+    }
+  });
+}
+function guestOnData(d){
+  if (!d || d.t !== 'sync' || !Array.isArray(d.moves)) return;
+  G.gameId = d.gameId; G.hostColor = d.hostColor === 'b' ? 'b' : 'w';
+  G.names = { host: String(d.names && d.names.host || '').slice(0, 20), guest: String(d.names && d.names.guest || '').slice(0, 20) };
+  G.role = d.role === 'spectator' ? 'spectator' : 'guest';
+  G.opponentOnline = true;
+  if (!setMoves(d.moves)) states = [initialState()];
+  selected = -1;
+  render();
+}
+
+/* ---------- obrazovky ---------- */
+function showGame(){
+  $('#menu').hidden = true; $('#game').hidden = false; $('#homeBtn').hidden = false;
+  render();
+}
+function goMenu(){
+  if (net.peer) try { net.peer.destroy(); } catch(e){}
+  location.href = location.pathname;
+}
+$('#homeBtn').onclick = goMenu;
+
+const nameInput = $('#nameInput');
+nameInput.value = myName;
+nameInput.addEventListener('input', () => { myName = nameInput.value.trim().slice(0, 20); LS.set('ds-name', myName); });
+
+function setUrlCode(code){ try { history.replaceState(null, '', location.pathname + '?hra=' + code.toUpperCase()); } catch(e){} }
+$('#hostBtn').onclick = () => { const code = rand(5); setUrlCode(code); startHost(code); };
+$('#joinBtn').onclick = () => {
+  const code = $('#codeInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const err = $('#joinErr');
+  if (code.length !== 5){ err.textContent = 'Kód má 5 znaků. Zkontroluj ho.'; err.hidden = false; return; }
+  err.hidden = true; setUrlCode(code);
+  if (LS.get('ds-game-' + code, null)) startHost(code); else startGuest(code);
+};
+$('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#joinBtn').click(); });
+$('#localBtn').onclick = () => {
+  G.mode = 'local';
+  const saved = LS.get('ds-local', null);
+  if (saved && saved.moves && saved.moves.length && gameStatus((setMoves(saved.moves), cur())) !== 'mate'){ /* pokračujeme v rozehrané hře */ }
+  else setMoves([]);
+  showGame();
+};
+$('#copyBtn').onclick = () => {
+  const inp = $('#shareLink'), btn = $('#copyBtn');
+  const done = () => { btn.textContent = 'Zkopírováno!'; setTimeout(() => btn.textContent = 'Kopírovat odkaz', 2000); };
+  const fallback = () => { inp.focus(); inp.select(); try { document.execCommand('copy'); done(); } catch(e){} };
+  if (navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done, fallback); else fallback();
+};
+
+if (!ONLINE_OK){ $('#noNet').hidden = false; $('#hostBtn').disabled = true; $('#joinBtn').disabled = true; }
+
+// duhový nápis
+(() => {
+  const el = $('#logoText'), cols = ['#ff4d4d','#ff8a3c','#f2b400','#2fbf55','#2a9df4','#5a6bff','#a24cff'];
+  let k = 0; el.innerHTML = [...el.textContent].map(ch => ch === ' ' ? ' ' : `<span style="color:${cols[k++ % cols.length]}">${ch}</span>`).join('');
+})();
+
+/* ---------- konfety ---------- */
+function confetti(){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = $('#confetti'), ctx = cv.getContext('2d');
+  cv.hidden = false; cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#ff4d4d','#ff9a3c','#ffd93c','#4cd964','#3cb4ff','#5a6bff','#b05cff'];
+  const parts = Array.from({ length: 160 }, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .5,
+    vx: (Math.random() - .5) * 3, vy: 2 + Math.random() * 4, r: 4 + Math.random() * 6,
+    a: Math.random() * 6, va: (Math.random() - .5) * .3, c: cols[Math.floor(Math.random() * cols.length)]
+  }));
+  const t0 = performance.now();
+  (function frame(t){
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of parts){ p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r/2, -p.r/4, p.r, p.r/2); ctx.restore(); }
+    if (t - t0 < 4000) requestAnimationFrame(frame); else { cv.hidden = true; }
+  })(t0);
+}
+
+/* ---------- start ---------- */
+(() => {
+  const code = (new URLSearchParams(location.search).get('hra') || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (code.length === 5){
+    if (LS.get('ds-game-' + code, null)) startHost(code); else startGuest(code);
+  }
+})();
+</script>
+</body>
+</html>
