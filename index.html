@@ -10,139 +10,212 @@
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>window.mqtt || document.write('<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"><\/script>');</script>
 <style>
-/* Rozvržení: šachovnice vlevo, panel hry vpravo; na telefonu pod sebou. */
+/* Rozvržení: hráč – šachovnice – hráč vlevo, ovládací panel vpravo; na telefonu pod sebou. */
 :root{
-  --bg:#fbf8ff;
+  --bg:#f7f5fd;
   --card:#ffffff;
   --ink:#2a2340;
   --muted:#6b6385;
-  --line:#e7e0f6;
+  --line:#e5e0f3;
+  --soft:#eef4fc;
   --accent:#2d72c0;
   --good:#1f9d55;
-  --bad:#e0365a;
+  --bad:#d92f4f;
+  --warn-bg:#fff6db; --warn-line:#ffe08a;
   --display:"Fredoka","Baloo 2","Trebuchet MS",system-ui,sans-serif;
   --body:"Nunito","Segoe UI",system-ui,-apple-system,sans-serif;
   --pieces:"Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Symbols","DejaVu Sans","Apple Symbols",serif;
   --rainbow:linear-gradient(90deg,#ef321f,#ef7312,#fabd0b,#73c82c,#2d72c0,#8b369e);
+  --bsize:min(calc(100vw - 32px),66vh,600px);
   color-scheme:light;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{
-  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
-  min-height:100vh;
-  padding-left:max(16px,env(safe-area-inset-left,0px));
-  padding-right:max(16px,env(safe-area-inset-right,0px));
-  padding-block:0 32px;
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;min-height:100vh;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 40px;
 }
 body::before{content:"";position:fixed;inset:0 0 auto;height:6px;background:var(--rainbow);z-index:5}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
+button:disabled{cursor:not-allowed}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
 
-header{max-width:1080px;margin:0 auto;padding:28px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.logo{font-family:var(--display);font-weight:700;font-size:clamp(30px,6vw,46px);line-height:1;margin:0;letter-spacing:.01em;display:flex;align-items:center;gap:12px}
-.logo .w span{display:inline-block}
+/* ---------- hlavička ---------- */
+header{max-width:1120px;margin:0 auto;padding:26px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:18px;flex-wrap:wrap;min-width:0}
-.school{height:clamp(44px,8vw,64px);width:auto;display:block}
+.school{height:clamp(42px,8vw,62px);width:auto;display:block}
 .divider{width:3px;align-self:stretch;min-height:40px;border-radius:3px;background:var(--line)}
+.logo{font-family:var(--display);font-weight:700;font-size:clamp(28px,5.5vw,44px);line-height:1;margin:0}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap}
+.pill-btn{border:2px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-weight:800;color:var(--muted);display:inline-flex;align-items:center;gap:6px;font-size:15px}
+.pill-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pill-btn svg{width:16px;height:16px}
 @media (max-width:520px){.divider{display:none}.brand{gap:8px}}
-.home-btn{border:2px solid var(--line);background:var(--card);border-radius:999px;padding:6px 16px;font-weight:700;color:var(--muted)}
-.home-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- společné ---------- */
+.card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:16px 18px;display:grid;gap:12px;min-width:0}
+.label{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0}
+.btn{border:2px solid var(--line);background:var(--card);border-radius:12px;padding:8px 14px;font-weight:800;font-size:15px}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.45}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{color:#fff;filter:brightness(1.08)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.link-btn{border:0;background:none;padding:0;color:var(--accent);font-weight:800;text-decoration:underline;text-underline-offset:3px;justify-self:start}
+.err{color:var(--bad);font-weight:700;margin:0}
+.muted{color:var(--muted);margin:0}
+
+/* figurky: barva figurek podle volby hráče */
+.pc{--sw:.34cqi;--sh:.45cqi;font-family:var(--pieces);font-size:40px;font-size:10.4cqi;line-height:1;display:inline-block;
+    -webkit-text-stroke:var(--sw) #2a2340;filter:drop-shadow(0 var(--sh) 0 rgba(42,35,64,.32))}
+.pc.sm{--sw:.8px;--sh:1px;font-size:inherit}
+.lk-bila{color:#fff}
+.lk-cerna{color:#231b38;-webkit-text-stroke-color:#231b38;filter:drop-shadow(0 0 var(--sh) #fff) drop-shadow(0 0 var(--sh) #fff)}
+.lk-cervena{color:#f0412c}
+.lk-oranzova{color:#f6851f}
+.lk-zluta{color:#ffd21f}
+.lk-zelena{color:#62c22e}
+.lk-modra{color:#3b86da}
+.lk-fialova{color:#9a45c0}
+.lk-ruzova{color:#ff6fb0}
+.lk-duhova{color:transparent;background:linear-gradient(160deg,#ef321f 15%,#ef7312 30%,#fabd0b 45%,#73c82c 60%,#2d72c0 75%,#8b369e 90%);-webkit-background-clip:text;background-clip:text}
+
+.swatches{display:flex;flex-wrap:wrap;gap:6px}
+.swatch{width:40px;height:40px;border-radius:12px;border:2px solid var(--line);background:var(--bg);display:grid;place-items:center;font-size:26px;padding:0;position:relative}
+.swatch:hover:not(:disabled){border-color:var(--accent)}
+.swatch[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 3px rgba(42,35,64,.15);background:#fff}
+.swatch:disabled{opacity:.3}
+.swatch:disabled::after{content:"";position:absolute;inset:50% 6px auto;height:2px;background:var(--ink);transform:rotate(-35deg)}
 
 /* ---------- menu ---------- */
-.menu{max-width:760px;margin:12px auto 0;display:grid;gap:20px}
-.menu .lead{font-size:18px;color:var(--muted);margin:0;text-wrap:balance}
-.field{display:grid;gap:6px;max-width:360px}
-.field label{font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.field input{border:2px solid var(--line);border-radius:14px;padding:10px 14px;background:var(--card);font-size:18px}
+.menu{max-width:1000px;margin:8px auto 0;display:grid;gap:22px}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:center}
+@media (max-width:760px){.hero{grid-template-columns:minmax(0,1fr)}.hero-board{display:none}}
+.hero-text{display:grid;gap:16px;min-width:0}
+.hero h2{font-family:var(--display);font-weight:600;font-size:clamp(24px,4vw,34px);line-height:1.15;margin:0;text-wrap:balance}
+.lead{font-size:17px;color:var(--muted);margin:0;max-width:56ch}
+.field{display:grid;gap:6px;max-width:420px}
+.field label,.flabel{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.field input{border:2px solid var(--line);border-radius:14px;padding:10px 14px;background:var(--card);font-size:18px;width:100%}
 .field input:focus{border-color:var(--accent);outline:none}
-.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-.choice{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:20px;display:grid;gap:10px;align-content:start;text-align:left;position:relative;overflow:hidden}
-.choice h2{font-family:var(--display);font-size:22px;margin:0;font-weight:600}
+.hero-board{width:240px;aspect-ratio:1;display:grid;grid-template-columns:repeat(4,1fr);border-radius:18px;overflow:hidden;border:6px solid #fff;
+  box-shadow:0 0 0 3px var(--line),0 20px 40px -20px rgba(45,114,192,.5);container-type:inline-size;transform:rotate(-3deg)}
+.hero-board > div{display:grid;place-items:center}
+.hero-board .pc{font-size:19cqi;--sw:.7cqi;--sh:.9cqi}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.choice{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:22px 20px 20px;display:grid;gap:10px;grid-template-rows:auto 1fr auto;position:relative;overflow:hidden}
+.choice h3{font-family:var(--display);font-size:22px;margin:0;font-weight:600}
 .choice p{margin:0;color:var(--muted)}
 .choice .stripe{position:absolute;inset:0 0 auto;height:8px}
 .big-btn{border:0;border-radius:14px;padding:12px 18px;font-weight:800;font-size:17px;color:#fff;background:var(--accent);box-shadow:0 4px 0 rgba(42,35,64,.25);transition:transform .08s}
 .big-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(42,35,64,.25)}
-.big-btn:disabled{opacity:.5;cursor:not-allowed}
+.big-btn:disabled{opacity:.5}
 .join-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .join-row input{width:100%;min-width:0;border:2px solid var(--line);border-radius:14px;padding:10px 12px;font-size:20px;font-family:var(--display);letter-spacing:.2em;text-transform:uppercase}
-.err{color:var(--bad);font-weight:700;margin:0}
 
-/* ---------- game ---------- */
-.game{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:28px;align-items:start}
-@media (max-width:860px){.game{grid-template-columns:minmax(0,1fr)}}
-.board-wrap{display:grid;gap:10px;justify-items:center}
-.board{
-  --size:min(calc(100vw - 32px),76vh,620px);
-  width:var(--size);aspect-ratio:1;max-width:100%;
-  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
-  border-radius:18px;overflow:hidden;border:7px solid #fff;
-  box-shadow:0 0 0 3px var(--line),0 18px 40px -18px rgba(90,60,180,.45);
-  container-type:inline-size;user-select:none;-webkit-user-select:none;touch-action:manipulation;
-}
-.sq{position:relative;border:0;padding:0;margin:0;display:grid;place-items:center;min-width:0;min-height:0}
-.sq .coord{position:absolute;font:700 2.1cqi/1 var(--body);color:rgba(42,35,64,.55);pointer-events:none}
-.sq .coord.f{right:4%;bottom:3%}
-.sq .coord.r{left:5%;top:4%}
-.pc{font-family:var(--pieces);font-size:40px;font-size:10.2cqi;line-height:1;pointer-events:none;transition:transform .12s}
-.pc.w{color:#fff;-webkit-text-stroke:.35cqi #2a2340;text-shadow:0 .5cqi 0 rgba(42,35,64,.35)}
-.pc.b{color:#231b38;text-shadow:0 0 .5cqi rgba(255,255,255,.9),0 .5cqi 0 rgba(42,35,64,.3)}
-.pc.sm{font-size:inherit}
-.pc.sm.w{-webkit-text-stroke:1.2px #2a2340;text-shadow:0 1px 0 rgba(42,35,64,.35)}
-.pc.sm.b{text-shadow:0 0 2px rgba(255,255,255,.9)}
-.sq.last::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.42)}
-.sq.sel{box-shadow:inset 0 0 0 .9cqi #2a2340}
-.sq.sel .pc{transform:scale(1.12)}
-.sq.check{background-image:radial-gradient(circle,rgba(224,54,90,.95) 0 30%,rgba(224,54,90,0) 72%)!important}
-.sq .dot{position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(42,35,64,.38);pointer-events:none;z-index:1}
-.sq .ring{position:absolute;inset:6%;border-radius:50%;border:1.1cqi solid rgba(42,35,64,.42);pointer-events:none;z-index:1}
-.sq .pc{position:relative;z-index:2}
-.captured{min-height:28px;font-family:var(--pieces);font-size:24px;line-height:1;width:min(calc(100vw - 32px),76vh,620px);max-width:100%;display:flex;flex-wrap:wrap;gap:0 2px}
-
-.panel{display:grid;gap:16px;min-width:0}
-.card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:16px 18px;display:grid;gap:10px;min-width:0}
-.status{font-family:var(--display);font-weight:600;font-size:clamp(22px,3.4vw,30px);line-height:1.15;margin:0;text-wrap:balance}
-.status-sub{margin:0;color:var(--muted)}
-.label{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0}
-.players{display:grid;gap:8px}
-.player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:2px solid transparent}
-.player.turn{border-color:var(--accent);background:#eef4fc}
-.player .chip{font-family:var(--pieces);font-size:28px;line-height:1;width:34px;text-align:center}
-.player .name{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.player .you{font-size:12px;font-weight:800;background:var(--ink);color:#fff;border-radius:999px;padding:2px 8px}
-.dot-on,.dot-off{width:10px;height:10px;border-radius:50%;flex:none}
+/* ---------- hra ---------- */
+.game{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:900px){.game{grid-template-columns:minmax(0,1fr)}}
+.board-col{display:grid;gap:10px;justify-items:center;min-width:0}
+.pbar{width:var(--bsize);max-width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);border:2px solid var(--line);border-radius:16px;position:relative;min-height:56px}
+.pbar.turn{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,114,192,.14)}
+.pbar .chip{font-size:36px;width:38px;text-align:center;flex:none}
+.pbar .who{display:grid;min-width:0;flex:1}
+.pbar .name{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar .meta{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.pbar .cap{font-size:20px;letter-spacing:-.06em;display:flex;flex-wrap:wrap;justify-content:flex-end;max-width:55%;line-height:1.1}
+.pbar .adv{font-weight:800;color:var(--good);font-size:14px;margin-left:4px;letter-spacing:0;align-self:center}
+.you{font-size:12px;font-weight:800;background:var(--ink);color:#fff;border-radius:999px;padding:1px 8px}
+.dot-on,.dot-off{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
 .dot-on{background:var(--good);box-shadow:0 0 0 3px rgba(31,157,85,.2)}
 .dot-off{background:#c9c2da}
-.share-link{display:flex;gap:8px;flex-wrap:wrap}
-.share-link input{flex:1 1 180px;min-width:0;border:2px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;background:var(--bg)}
-.local-note{margin:0;padding:10px 12px;border-radius:12px;background:#fff6db;border:2px solid #ffe08a;color:var(--ink);font-size:14px}
-.code{font-family:var(--display);font-weight:700;font-size:32px;letter-spacing:.22em;margin:0;background:var(--rainbow);-webkit-background-clip:text;background-clip:text;color:transparent}
-.small-btn{border:2px solid var(--line);background:var(--card);border-radius:12px;padding:8px 14px;font-weight:800}
-.small-btn:hover{border-color:var(--accent);color:var(--accent)}
-.small-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.small-btn.danger{border-color:var(--bad);color:var(--bad)}
-.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.float-emoji{position:absolute;left:50%;top:-14px;font-size:44px;line-height:1;pointer-events:none;z-index:6;animation:floatUp 2.4s ease-out forwards}
+@keyframes floatUp{0%{transform:translate(-50%,10px) scale(.5);opacity:0}12%{transform:translate(-50%,0) scale(1.2);opacity:1}25%{transform:translate(-50%,-6px) scale(1)}100%{transform:translate(-50%,-70px);opacity:0}}
+
+.board{width:var(--bsize);aspect-ratio:1;max-width:100%;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  border-radius:18px;overflow:hidden;border:7px solid #fff;box-shadow:0 0 0 3px var(--line),0 18px 40px -18px rgba(45,114,192,.45);
+  container-type:inline-size;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.sq{position:relative;border:0;padding:0;margin:0;display:grid;place-items:center;min-width:0;min-height:0}
+.sq .coord{position:absolute;font:800 2.1cqi/1 var(--body);color:rgba(42,35,64,.5);pointer-events:none}
+.sq .coord.f{right:4%;bottom:3%}
+.sq .coord.r{left:5%;top:4%}
+.sq .pc{position:relative;z-index:2;pointer-events:none;transition:transform .12s}
+.sq.last::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.45)}
+.sq.sel{box-shadow:inset 0 0 0 .9cqi #2a2340}
+.sq.sel .pc{transform:scale(1.13)}
+.sq.check{background-image:radial-gradient(circle,rgba(217,47,79,.95) 0 30%,rgba(217,47,79,0) 72%)!important}
+.sq .dot{position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(42,35,64,.36);pointer-events:none;z-index:1}
+.sq .ring{position:absolute;inset:6%;border-radius:50%;border:1.1cqi solid rgba(42,35,64,.42);pointer-events:none;z-index:1}
+
+.reactions{width:var(--bsize);max-width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.reactions .label{margin-right:4px}
+.reactions button{width:42px;height:42px;border-radius:12px;border:2px solid var(--line);background:var(--card);font-size:22px;line-height:1;padding:0}
+.reactions button:hover{border-color:var(--accent);transform:translateY(-2px)}
+
+.panel{display:grid;gap:16px;min-width:0}
+.status{font-family:var(--display);font-weight:600;font-size:clamp(22px,3.2vw,30px);line-height:1.15;margin:0;text-wrap:balance}
+.status-sub{margin:0;color:var(--muted)}
+.offer{display:grid;gap:8px;padding:12px;border-radius:14px;background:var(--warn-bg);border:2px solid var(--warn-line)}
+.offer p{margin:0;font-weight:800}
+.net-msg{margin:0;font-weight:700;color:var(--bad)}
 .conn{margin:0;font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
 .conn::before{content:"";width:8px;height:8px;border-radius:50%;background:#c9c2da;flex:none}
 .conn.ok::before{background:var(--good)}
-.net-msg{margin:0;font-weight:700;color:var(--bad)}
+.share-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.share-link input{min-width:0;width:100%;border:2px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;background:var(--bg)}
+.code{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:.22em;margin:0;background:var(--rainbow);-webkit-background-clip:text;background-clip:text;color:transparent;justify-self:start}
+.local-note{margin:0;padding:10px 12px;border-radius:12px;background:var(--warn-bg);border:2px solid var(--warn-line);font-size:14px}
+.set-row{display:grid;gap:6px}
+.themes{display:flex;gap:8px;flex-wrap:wrap}
+.theme{border:2px solid var(--line);border-radius:12px;background:var(--card);padding:6px;display:grid;gap:4px;justify-items:center;font-size:12px;font-weight:800;color:var(--muted)}
+.theme[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.theme .mini{width:44px;height:44px;display:grid;grid-template-columns:repeat(4,1fr);border-radius:6px;overflow:hidden}
 .moves{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:2.4em 1fr 1fr;gap:2px 8px;max-height:220px;overflow:auto;font-variant-numeric:tabular-nums}
 .moves .n{color:var(--muted);text-align:right}
 .moves .g{font-family:var(--pieces);font-size:1.15em}
-.empty{color:var(--muted);margin:0}
 
-/* promotion */
-.overlay{position:fixed;inset:0;background:rgba(42,35,64,.45);display:grid;place-items:center;z-index:20;padding:16px}
-.promo{background:var(--card);border-radius:22px;padding:20px;display:grid;gap:12px;text-align:center}
-.promo h3{margin:0;font-family:var(--display);font-weight:600;font-size:22px}
-.promo-row{display:flex;gap:10px}
-.promo-row button{width:72px;height:72px;border-radius:16px;border:2px solid var(--line);background:var(--bg);font-family:var(--pieces);font-size:48px;line-height:1}
+/* ---------- překryvná okna ---------- */
+.overlay{position:fixed;inset:0;background:rgba(42,35,64,.5);display:grid;place-items:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));overflow:auto}
+.modal{background:var(--card);border-radius:22px;padding:22px;display:grid;gap:14px;width:min(100%,520px);max-height:calc(100vh - 32px);overflow:auto;position:relative}
+.modal.wide{width:min(100%,980px)}
+.modal h3{margin:0;font-family:var(--display);font-weight:600;font-size:24px;padding-right:44px}
+.close-x{position:absolute;top:14px;right:14px;width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:var(--card);font-size:20px;line-height:1;font-weight:800}
+.promo-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.promo-row button{width:72px;height:72px;border-radius:16px;border:2px solid var(--line);background:var(--bg);font-size:48px;line-height:1;padding:0}
 .promo-row button:hover{border-color:var(--accent)}
+.help-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.help-list li{display:grid;grid-template-columns:48px minmax(0,1fr);gap:12px;align-items:start;padding:10px;border-radius:14px;background:var(--bg)}
+.help-list .pc{font-size:40px;--sw:1px;--sh:1.5px}
+.help-list b{font-family:var(--display);font-weight:600;font-size:18px}
+.help-list p{margin:2px 0 0;color:var(--muted)}
+.help-list .val{font-size:12px;font-weight:800;color:var(--accent);margin-left:6px}
+
+/* panel učitele */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{border:2px solid var(--line);border-radius:16px;padding:12px 14px;display:grid;gap:2px}
+.tile b{font-family:var(--display);font-weight:600;font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:14px;font-weight:700}
+.table-wrap{overflow-x:auto;border:2px solid var(--line);border-radius:16px}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:640px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:13px;font-weight:800;white-space:nowrap}
+.tag.play{background:#e3f4ea;color:#17703e}
+.tag.done{background:#eceaf3;color:var(--muted)}
+.codecell{font-family:var(--display);font-weight:700;letter-spacing:.12em}
+.pw-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.pw-row input{min-width:0;border:2px solid var(--line);border-radius:12px;padding:10px 12px;font-size:17px}
 
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:30}
-@media (prefers-reduced-motion:reduce){.pc,.big-btn{transition:none}}
+@media (prefers-reduced-motion:reduce){.pc,.big-btn,.reactions button{transition:none}.float-emoji{animation:none;transform:translate(-50%,-30px)}.hero-board{transform:none}}
 </style>
 </head>
 <body>
@@ -150,96 +223,179 @@ header{max-width:1080px;margin:0 auto;padding:28px 0 18px;display:flex;align-ite
   <div class="brand">
     <img class="school" src="data:image/png;base64,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" alt="ERAZIM Polná">
     <span class="divider" aria-hidden="true"></span>
-    <h1 class="logo"><span class="w" id="logoText">Duhové šachy</span></h1>
+    <h1 class="logo"><span id="logoText">Duhové šachy</span></h1>
   </div>
-  <button class="home-btn" id="homeBtn" hidden>← Menu</button>
+  <div class="head-actions">
+    <button class="pill-btn" id="teacherBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Pro učitele</button>
+    <button class="pill-btn" id="homeBtn" hidden>← Menu</button>
+  </div>
 </header>
 
 <!-- MENU -->
 <section class="menu" id="menu">
-  <p class="lead">Šachy pro dva hráče. Založ hru, pošli kamarádovi odkaz a hrajte každý na svém počítači nebo tabletu.</p>
-  <div class="field">
-    <label for="nameInput">Tvoje jméno</label>
-    <input id="nameInput" maxlength="20" placeholder="Např. Ema" autocomplete="off">
+  <div class="hero">
+    <div class="hero-text">
+      <h2>Zahraj si šachy s kamarádem</h2>
+      <p class="lead">Založ hru a pošli kamarádovi odkaz nebo kód. Každý hraje na svém počítači nebo tabletu.</p>
+      <div class="field">
+        <label for="nameInput">Tvoje jméno</label>
+        <input id="nameInput" maxlength="20" placeholder="Např. Ema" autocomplete="off">
+        <p class="err" id="nameErr" hidden>Nejdřív napiš své jméno, ať soupeř ví, s kým hraje.</p>
+      </div>
+      <div class="set-row">
+        <span class="flabel">Barva tvých figurek</span>
+        <div class="swatches" id="menuSwatches"></div>
+      </div>
+    </div>
+    <div class="hero-board" id="heroBoard" aria-hidden="true"></div>
   </div>
   <div class="choices">
     <div class="choice">
       <span class="stripe" style="background:linear-gradient(90deg,#ef321f,#ef7312)"></span>
-      <h2>Založit hru</h2>
+      <h3>Založit hru</h3>
       <p>Dostaneš odkaz a kód. Pošli je kamarádovi.</p>
       <button class="big-btn" id="hostBtn" style="background:#ef7312">Založit hru</button>
     </div>
     <div class="choice">
       <span class="stripe" style="background:linear-gradient(90deg,#fabd0b,#73c82c)"></span>
-      <h2>Připojit se</h2>
+      <h3>Připojit se</h3>
       <p>Máš od kamaráda kód? Napiš ho sem.</p>
       <div class="join-row">
         <input id="codeInput" maxlength="5" placeholder="KÓD" autocomplete="off" aria-label="Kód hry">
         <button class="big-btn" id="joinBtn" style="background:#4f9e1c">Hrát</button>
       </div>
-      <p class="err" id="joinErr" hidden></p>
     </div>
     <div class="choice">
       <span class="stripe" style="background:linear-gradient(90deg,#2d72c0,#8b369e)"></span>
-      <h2>Na jednom zařízení</h2>
+      <h3>Na jednom zařízení</h3>
       <p>Oba hráči u jednoho počítače, střídáte se.</p>
       <button class="big-btn" id="localBtn" style="background:#8b369e">Hrát spolu</button>
     </div>
   </div>
+  <p class="err" id="joinErr" hidden></p>
   <p class="err" id="noNet" hidden>Hra přes internet teď nejde (chybí připojení k internetu). Hra na jednom zařízení funguje.</p>
+  <button class="link-btn" data-help>Jak se hýbou figurky?</button>
 </section>
 
-<!-- GAME -->
+<!-- HRA -->
 <section class="game" id="game" hidden>
-  <div class="board-wrap">
-    <div class="captured" id="capTop" aria-label="Sebrané figurky"></div>
-    <div class="board" id="board" role="grid" aria-label="Šachovnice"></div>
-    <div class="captured" id="capBottom" aria-label="Sebrané figurky"></div>
+  <div class="board-col">
+    <div class="pbar" id="barTop"></div>
+    <div class="board" id="board" aria-label="Šachovnice"></div>
+    <div class="pbar" id="barBottom"></div>
+    <div class="reactions" id="reactions" hidden><span class="label">Pošli soupeři:</span></div>
   </div>
   <div class="panel">
     <div class="card">
-      <p class="status" id="status">Na tahu je bílý</p>
+      <p class="status" id="status"></p>
       <p class="status-sub" id="statusSub" hidden></p>
+      <div class="offer" id="offerBox" hidden>
+        <p>Soupeř nabízí remízu. Souhlasíš?</p>
+        <div class="btn-row"><button class="btn good" id="acceptDraw">Ano, remíza</button><button class="btn" id="declineDraw">Ne, hrajeme dál</button></div>
+      </div>
       <p class="net-msg" id="netMsg" hidden></p>
       <p class="conn" id="conn" hidden></p>
+      <div class="btn-row">
+        <button class="btn" id="undoBtn" hidden>Vrátit tah</button>
+        <button class="btn" id="drawBtn" hidden>Nabídnout remízu</button>
+        <button class="btn" id="resignBtn" hidden>Vzdát se</button>
+        <button class="btn" id="newBtn">Nová hra</button>
+      </div>
     </div>
 
     <div class="card" id="shareCard" hidden>
       <p class="label">Pozvi kamaráda</p>
       <div class="share-link" id="shareLinkRow">
         <input id="shareLink" readonly aria-label="Odkaz na hru">
-        <button class="small-btn primary" id="copyBtn">Kopírovat odkaz</button>
+        <button class="btn primary" id="copyBtn">Kopírovat odkaz</button>
       </div>
-      <p class="local-note" id="localNote" hidden>Hra je otevřená jako soubor z tohoto počítače, a proto zatím nemá odkaz ke sdílení. Odkaz se objeví, až hru nahrajete na internet (např. GitHub Pages nebo Netlify). Do té doby může kamarád otevřít stejný soubor u sebe, kliknout na <b>Připojit se</b> a napsat tento kód:</p>
-      <p class="status-sub" id="codeHint" style="margin:0">Nebo mu řekni kód hry:</p>
+      <p class="local-note" id="localNote" hidden>Hra je otevřená jako soubor z tohoto počítače, a proto nemá odkaz ke sdílení. Odkaz se objeví, až bude hra nahraná na internetu. Kamarád zatím může otevřít stejný soubor u sebe, kliknout na <b>Připojit se</b> a napsat kód:</p>
+      <p class="muted" id="codeHint">Nebo mu řekni kód hry:</p>
       <p class="code" id="codeShow"></p>
     </div>
 
     <div class="card">
-      <p class="label">Hráči</p>
-      <div class="players" id="players"></div>
-      <p class="status-sub" id="spectators" hidden></p>
-      <div class="btn-row">
-        <button class="small-btn" id="newBtn">Nová hra</button>
-        <button class="small-btn" id="flipBtn">Otočit šachovnici</button>
+      <p class="label">Vzhled a nastavení</p>
+      <div id="lookRows" style="display:grid;gap:12px"></div>
+      <div class="set-row">
+        <span class="flabel">Šachovnice</span>
+        <div class="themes" id="themes"></div>
       </div>
+      <div class="btn-row">
+        <button class="btn" id="soundBtn"></button>
+        <button class="btn" id="flipBtn">Otočit šachovnici</button>
+      </div>
+      <button class="link-btn" data-help>Jak se hýbou figurky?</button>
     </div>
 
     <div class="card">
       <p class="label">Tahy</p>
       <ol class="moves" id="moves"></ol>
-      <p class="empty" id="movesEmpty">Zatím se netáhlo. Bílý začíná.</p>
+      <p class="muted" id="movesEmpty">Zatím se netáhlo. Bílý začíná.</p>
     </div>
   </div>
 </section>
 
+<!-- proměna pěšce -->
 <div class="overlay" id="promoOverlay" hidden>
-  <div class="promo" role="dialog" aria-label="Proměna pěšce">
-    <h3>Na co se pěšec promění?</h3>
+  <div class="modal" role="dialog" aria-label="Proměna pěšce" style="text-align:center;width:min(100%,400px)">
+    <h3 style="padding:0">Na co se pěšec promění?</h3>
     <div class="promo-row" id="promoRow"></div>
-    <button class="small-btn" id="promoCancel">Zpět</button>
+    <button class="btn" id="promoCancel" style="justify-self:center">Zpět</button>
   </div>
 </div>
+
+<!-- jméno při otevření odkazu -->
+<div class="overlay" id="nameOverlay" hidden>
+  <form class="modal" id="nameForm" style="width:min(100%,420px)">
+    <h3 style="padding:0">Jak se jmenuješ?</h3>
+    <p class="muted">Soupeř uvidí tvé jméno vedle šachovnice.</p>
+    <div class="field"><input id="nameInput2" maxlength="20" placeholder="Např. Tom" autocomplete="off" aria-label="Tvoje jméno"></div>
+    <div class="set-row"><span class="flabel">Barva tvých figurek</span><div class="swatches" id="nameSwatches"></div></div>
+    <button class="big-btn" type="submit">Jdeme hrát</button>
+  </form>
+</div>
+
+<!-- nápověda -->
+<div class="overlay" id="helpOverlay" hidden>
+  <div class="modal" role="dialog" aria-label="Jak se hýbou figurky">
+    <button class="close-x" data-close aria-label="Zavřít">×</button>
+    <h3>Jak se hýbou figurky</h3>
+    <ul class="help-list" id="helpList"></ul>
+    <p class="muted">Cíl hry: dát soupeřovu králi <b>mat</b>, tedy napadnout ho tak, aby nemohl nikam utéct. Když na šachovnici klikneš na figurku, hra ti tečkami ukáže, kam smí táhnout.</p>
+  </div>
+</div>
+
+<!-- panel učitele -->
+<div class="overlay" id="teacherOverlay" hidden>
+  <div class="modal wide" role="dialog" aria-label="Panel pro učitele">
+    <button class="close-x" data-close aria-label="Zavřít">×</button>
+    <h3>Panel pro učitele</h3>
+    <form id="pwForm" class="set-row">
+      <label class="flabel" for="pwInput">Heslo</label>
+      <div class="pw-row"><input id="pwInput" type="password" autocomplete="current-password"><button class="btn primary" type="submit">Otevřít</button></div>
+      <p class="err" id="pwErr" hidden>Heslo nesouhlasí.</p>
+    </form>
+    <div id="teacherData" hidden style="display:grid;gap:14px">
+      <div class="tiles">
+        <div class="tile"><b id="tOnline">0</b><span>dětí právě hraje</span></div>
+        <div class="tile"><b id="tActive">0</b><span>rozehraných her</span></div>
+        <div class="tile"><b id="tToday">0</b><span>her za posledních 24 h</span></div>
+      </div>
+      <p class="conn" id="tConn"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kód</th><th>Bílý</th><th>Černý</th><th>Tahů</th><th>Stav</th><th>Naposledy</th><th></th></tr></thead>
+          <tbody id="tBody"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="tEmpty">Zatím tu nejsou žádné hry. Jakmile děti založí hru, objeví se tady.</p>
+      <p class="muted" style="font-size:14px">Přehled se obnovuje sám. Zelená tečka znamená, že hráč má hru právě otevřenou. Tlačítkem Sledovat otevřete hru jako divák, do hry tím nezasáhnete.</p>
+      <button class="btn" id="tLogout" style="justify-self:start">Zamknout panel</button>
+    </div>
+  </div>
+</div>
+
 <canvas id="confetti" hidden></canvas>
 
 <script>
@@ -364,14 +520,17 @@ function gameStatus(s){
 
 /* ---------------- aplikace ---------------- */
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const OUTLINE = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' };
 const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
 const VS = '︎';
 const NAME_CZ = { K: 'král', Q: 'dáma', R: 'věž', B: 'střelec', N: 'jezdec', P: 'pěšec' };
+const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
 const ALPHA = 'abcdefghjkmnpqrstuvwxyz23456789';
 const TOPIC = 'erazim-duhove-sachy/v2/';
-// Veřejné servery, přes které chodí tahy. Hra se připojí ke všem najednou,
-// takže stačí, aby fungoval aspoň jeden.
+// Heslo do panelu pro učitele je uložené jen jako otisk (SHA-256).
+const TEACHER_HASH = '92650f87155b34aa49480cec170efc6713376ac0a7de7774f3f4a400b5b8c208';
+// Veřejné servery, přes které chodí tahy. Hra se připojí ke všem najednou, stačí jeden funkční.
 const BROKERS = window.DS_BROKERS || [
   { url: 'wss://public.cloud.shiftr.io', username: 'public', password: 'public' },
   { url: 'wss://broker.emqx.io:8084/mqtt' },
@@ -379,25 +538,39 @@ const BROKERS = window.DS_BROKERS || [
   { url: 'wss://test.mosquitto.org:8081/mqtt' }
 ];
 const ONLINE_OK = typeof mqtt !== 'undefined';
-const ONLINE_SEC = 13000;   // jak dlouho po posledním ozvání bereme hráče jako připojeného
+const ONLINE_MS = 13000;
+const LOOKS = [['bila','Bílá'],['cerna','Černá'],['cervena','Červená'],['oranzova','Oranžová'],['zluta','Žlutá'],
+               ['zelena','Zelená'],['modra','Modrá'],['fialova','Fialová'],['ruzova','Růžová'],['duhova','Duhová']];
+const LOOK_KEYS = LOOKS.map(l => l[0]);
+const THEMES = [['duha','Duha'],['jemna','Jemná'],['erazim','Modrá'],['drevo','Dřevo']];
+const EMOJI = ['👍','👏','😮','😂','🤔','😅','🎉','❤️'];
 
 function store(kind){
   return {
     get(k, d){ try { const v = window[kind].getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
-    set(k, v){ try { window[kind].setItem(k, JSON.stringify(v)); } catch(e){} }
+    set(k, v){ try { window[kind].setItem(k, JSON.stringify(v)); } catch(e){} },
+    del(k){ try { window[kind].removeItem(k); } catch(e){} }
   };
 }
 const LS = store('localStorage'), SS = store('sessionStorage');
 function rand(n){ let s = ''; const a = new Uint32Array(n); crypto.getRandomValues(a); for (const x of a) s += ALPHA[x % ALPHA.length]; return s; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 const tabId = SS.get('ds-tab', null) || (() => { const t = rand(10); SS.set('ds-tab', t); return t; })();
 const tabSince = Date.now();
 let myName = LS.get('ds-name', '');
+let myLook = LOOK_KEYS.includes(LS.get('ds-look', null)) ? LS.get('ds-look', null) : null;
+let localLook = Object.assign({ w: 'bila', b: 'cerna' }, LS.get('ds-local-look', {}));
+let theme = THEMES.some(t => t[0] === LS.get('ds-theme', '')) ? LS.get('ds-theme', '') : 'duha';
+let soundOn = LS.get('ds-sound', true);
+const params = new URLSearchParams(location.search);
+const watchOnly = params.get('divak') === '1';
 
 const G = { mode: 'menu', code: null, seat: null, doc: null, role: null, gameId: 1, moves: [], hostColor: 'w',
             names: { host: '', guest: '' }, seen: new Map(), settled: false, started: 0 };
 let states = [initialState()];
-let selected = -1, flipped = false, pendingPromo = null, netMsg = '', newConfirm = false, lastCelebrated = '';
-const net = { clients: [], hbTimer: null, republish: null };
+let selected = -1, flipped = false, pendingPromo = null, netMsg = '', lastCelebrated = '', lastSound = '';
+const confirmState = {};
+const net = { clients: [], timer: null, republish: null, summary: null, reactIds: new Set(), lastReact: 0 };
 
 const cur = () => states[states.length - 1];
 function myColor(){
@@ -427,95 +600,160 @@ function playerName(c){
   if (hostSide) return 'Hráč 1';
   return G.doc && G.doc.guestId ? 'Hráč 2' : 'Čeká se na kamaráda…';
 }
-function seatOnline(id){ return !!id && (id === G.seat || (G.seen.get(id) || 0) > Date.now() - ONLINE_SEC); }
+function seatOnline(id){ return !!id && (id === G.seat || (G.seen.get(id) || 0) > Date.now() - ONLINE_MS); }
+function sideSeat(c){ return G.doc ? (c === G.hostColor ? G.doc.hostId : G.doc.guestId) : null; }
+
+/* ---------- barvy figurek ---------- */
+function resolvedLooks(){
+  if (G.mode === 'local') return { w: localLook.w, b: localLook.b };
+  const d = G.doc, hc = G.hostColor, gc = opp(hc);
+  const def = c => c === 'w' ? 'bila' : 'cerna';
+  let h = (d && d.look && d.look.host) || def(hc);
+  let g = (d && d.look && d.look.guest) || def(gc);
+  if (g === h) g = h !== def(gc) ? def(gc) : def(hc);
+  return { [hc]: h, [gc]: g };
+}
+function pieceHTML(p, small, looks){
+  const lk = (looks || resolvedLooks())[p[0]];
+  return `<span class="pc lk-${lk}${small ? ' sm' : ''}">${GLYPH[p[1]]}${VS}</span>`;
+}
+
+/* ---------- stav hry ---------- */
+function fullStatus(){
+  const end = G.mode === 'online' && G.doc ? G.doc.end : null;
+  if (end) return end.reason === 'resign' ? { kind: 'resign', winner: end.winner, by: end.by } : { kind: 'agreed' };
+  const st = gameStatus(cur());
+  if (st === 'mate') return { kind: 'mate', winner: opp(cur().turn) };
+  return { kind: st };
+}
+const isOver = k => k !== 'play' && k !== 'check';
+function statusLabel(fs){
+  switch (fs.kind){
+    case 'mate': return 'Mat, vyhrál ' + colorName(fs.winner);
+    case 'resign': return 'Vzdáno, vyhrál ' + colorName(fs.winner);
+    case 'stalemate': return 'Pat (remíza)';
+    case 'material': case 'fifty': case 'agreed': return 'Remíza';
+    case 'check': return 'Hraje se (šach)';
+    default: return 'Hraje se';
+  }
+}
 
 /* ---------- vykreslení ---------- */
-function squareColor(i){
-  const r = i >> 3, f = i & 7;
-  const hue = Math.round(((f + (7 - r)) / 14) * 290);   // duha po úhlopříčkách: červená → fialová
-  const light = (r + f) % 2 === 0;
-  return light ? `hsl(${hue} 95% 88%)` : `hsl(${hue} 70% 58%)`;
+function squareColor(i, th){
+  const r = i >> 3, f = i & 7, light = (r + f) % 2 === 0;
+  const hue = Math.round(((f + (7 - r)) / 14) * 290);   // duha po úhlopříčkách
+  switch (th || theme){
+    case 'jemna': return light ? `hsl(${hue} 90% 94%)` : `hsl(${hue} 62% 79%)`;
+    case 'erazim': return light ? '#e8f0fa' : '#86acd9';
+    case 'drevo': return light ? '#f3dfb8' : '#bf8b58';
+    default: return light ? `hsl(${hue} 95% 88%)` : `hsl(${hue} 70% 58%)`;
+  }
+}
+function swatchesHTML(selectedKey, disabledKey){
+  return LOOKS.map(([k, n]) => `<button class="swatch" type="button" data-look="${k}" aria-label="${n}" title="${n}" aria-pressed="${k === selectedKey}"${k === disabledKey ? ' disabled' : ''}>` +
+    `<span class="pc sm lk-${k}">${GLYPH.P}${VS}</span></button>`).join('');
+}
+function renderMenuLooks(){
+  for (const id of ['#menuSwatches', '#nameSwatches']) $(id).innerHTML = swatchesHTML(myLook);
+  // náhled na úvodní obrazovce
+  const mine = myLook || 'bila', other = mine === 'cerna' ? 'bila' : 'cerna';
+  const layout = ['bR','bQ','bK','bN', 'bP','','','bP', '','wP','wP','', 'wN','wQ','wK','wR'];
+  const looks = { w: mine, b: other };
+  $('#heroBoard').innerHTML = layout.map((p, k) => {
+    return `<div style="background:${squareColor((k >> 2) * 8 + (k & 3))}">${p ? pieceHTML(p, false, looks) : ''}</div>`;
+  }).join('');
+}
+function renderBar(el, side, looks){
+  const fs = fullStatus(), s = cur();
+  const mine = myColor();
+  el.className = 'pbar' + (s.turn === side && !isOver(fs.kind) ? ' turn' : '');
+  // sebrané figurky: co tento hráč sebral soupeři
+  const caps = [];
+  for (const x of states) if (x.captured && x.captured[0] !== side) caps.push(x.captured);
+  const order = 'QRBNP';
+  caps.sort((a, b) => order.indexOf(a[1]) - order.indexOf(b[1]));
+  const score = c => states.reduce((n, x) => n + (x.captured && x.captured[0] !== c ? VALUE[x.captured[1]] : 0), 0);
+  const adv = score(side) - score(opp(side));
+  let meta = G.mode === 'local' ? (s.turn === side && !isOver(fs.kind) ? 'je na tahu' : '') : (side === 'w' ? 'Bílé figurky' : 'Černé figurky');
+  let badge = '';
+  if (G.mode === 'online'){
+    if (side === mine && G.role !== 'spectator') badge = '<span class="you">ty</span>';
+    else {
+      const on = seatOnline(sideSeat(side));
+      meta = `<span class="${on ? 'dot-on' : 'dot-off'}"></span>${on ? 'připojen' : 'nepřipojen'}`;
+    }
+  }
+  el.innerHTML = `<span class="chip">${pieceHTML(side + 'K', true, looks)}</span>` +
+    `<span class="who"><span class="name">${esc(playerName(side))} ${badge}</span><span class="meta">${meta}</span></span>` +
+    `<span class="cap">${caps.map(p => pieceHTML(p, true, looks)).join('')}${adv > 0 ? `<span class="adv">+${adv}</span>` : ''}</span>`;
+  el.dataset.side = side;
 }
 function render(){
-  const s = cur(), st = gameStatus(s);
+  if (G.mode === 'menu') return;
+  const s = cur(), fs = fullStatus(), over = isOver(fs.kind);
   const mine = myColor();
+  const looks = resolvedLooks();
   const flip = G.mode === 'local' ? flipped : (mine === 'b') !== flipped;
   const targets = selected >= 0 ? legalMoves(s).filter(m => m.from === selected).map(m => m.to) : [];
   const last = G.moves[G.moves.length - 1];
-  const ck = (st === 'check' || st === 'mate') ? kingSq(s.board, s.turn) : -1;
+  const ck = (fs.kind === 'check' || fs.kind === 'mate') ? kingSq(s.board, s.turn) : -1;
 
-  const board = $('#board'); board.innerHTML = '';
+  let html = '';
   for (let k = 0; k < 64; k++){
     const i = flip ? 63 - k : k, p = s.board[i];
-    const el = document.createElement('button');
-    el.className = 'sq'; el.style.background = squareColor(i); el.dataset.sq = i;
-    el.setAttribute('aria-label', sqName(i) + (p ? ' ' + colorName(p[0]) + ' ' + NAME_CZ[p[1]] : ''));
-    if (last && (i === last.from || i === last.to)) el.classList.add('last');
-    if (i === selected) el.classList.add('sel');
-    if (i === ck) el.classList.add('check');
-    const col = k & 7, row = k >> 3;
-    if (row === 7) el.insertAdjacentHTML('beforeend', `<span class="coord f">${FILES[i & 7]}</span>`);
-    if (col === 0) el.insertAdjacentHTML('beforeend', `<span class="coord r">${8 - (i >> 3)}</span>`);
-    if (targets.includes(i)) el.insertAdjacentHTML('beforeend', p || i === s.ep ? '<span class="ring"></span>' : '<span class="dot"></span>');
-    if (p) el.insertAdjacentHTML('beforeend', `<span class="pc ${p[0]}">${GLYPH[p[1]]}${VS}</span>`);
-    board.appendChild(el);
+    const cls = ['sq'];
+    if (last && (i === last.from || i === last.to)) cls.push('last');
+    if (i === selected) cls.push('sel');
+    if (i === ck) cls.push('check');
+    let inner = '';
+    if ((k >> 3) === 7) inner += `<span class="coord f">${FILES[i & 7]}</span>`;
+    if ((k & 7) === 0) inner += `<span class="coord r">${8 - (i >> 3)}</span>`;
+    if (targets.includes(i)) inner += p || i === s.ep ? '<span class="ring"></span>' : '<span class="dot"></span>';
+    if (p) inner += pieceHTML(p, false, looks);
+    html += `<button class="${cls.join(' ')}" style="background:${squareColor(i)}" data-sq="${i}" aria-label="${sqName(i)}${p ? ' ' + colorName(p[0]) + ' ' + NAME_CZ[p[1]] : ''}">${inner}</button>`;
   }
+  $('#board').innerHTML = html;
+  const bottom = flip ? 'b' : 'w';
+  renderBar($('#barBottom'), bottom, looks);
+  renderBar($('#barTop'), opp(bottom), looks);
 
-  // sebrané figurky
-  const cap = { w: [], b: [] };
-  for (const x of states) if (x.captured) cap[x.captured[0]].push(x.captured[1]);
-  const order = 'QRBNP';
-  const capHtml = c => cap[c].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(t => `<span class="pc sm ${c}">${GLYPH[t]}${VS}</span>`).join('');
-  const bottomColor = flip ? 'b' : 'w';
-  $('#capBottom').innerHTML = capHtml(opp(bottomColor));   // co sebral hráč dole
-  $('#capTop').innerHTML = capHtml(bottomColor);
-
-  // stav
+  // stav hry
+  const nm = c => playerName(c);
   let text, sub = '';
-  if (st === 'mate'){
-    const winner = opp(s.turn);
-    text = G.mode === 'online' && mine ? (winner === mine ? 'Šach mat! Vyhrál jsi! 🎉' : 'Šach mat. Tentokrát vyhrál soupeř.') : `Šach mat! Vyhrává ${colorName(winner)}. 🎉`;
-    sub = 'Hru můžete začít znovu tlačítkem Nová hra.';
-  } else if (st === 'stalemate'){ text = 'Pat – remíza!'; sub = 'Hráč na tahu nemůže táhnout, ale není v šachu.'; }
-  else if (st === 'material'){ text = 'Remíza!'; sub = 'Na šachovnici nezbylo dost figurek, aby někdo mohl dát mat.'; }
-  else if (st === 'fifty'){ text = 'Remíza!'; sub = '50 tahů bez braní a bez tahu pěšcem.'; }
+  if (fs.kind === 'mate'){
+    text = G.mode === 'online' && mine ? (fs.winner === mine ? 'Šach mat! Vyhrál jsi! 🎉' : 'Šach mat. Tentokrát vyhrál soupeř.') : `Šach mat! Vyhrává ${G.mode === 'online' ? nm(fs.winner) : colorName(fs.winner)}. 🎉`;
+    sub = 'Novou hru začnete tlačítkem Nová hra.';
+  } else if (fs.kind === 'resign'){
+    text = G.mode === 'online' && mine ? (fs.winner === mine ? 'Soupeř vzdal hru. Vyhrál jsi! 🎉' : 'Vzdal jsi hru.') : `${nm(opp(fs.winner))} vzdává hru. Vyhrává ${nm(fs.winner)}.`;
+    sub = 'Novou hru začnete tlačítkem Nová hra.';
+  } else if (fs.kind === 'agreed'){ text = 'Remíza dohodou 🤝'; sub = 'Oba hráči se dohodli na remíze.'; }
+  else if (fs.kind === 'stalemate'){ text = 'Pat – remíza!'; sub = 'Hráč na tahu nemůže táhnout, ale není v šachu.'; }
+  else if (fs.kind === 'material'){ text = 'Remíza!'; sub = 'Na šachovnici nezbylo dost figurek, aby někdo mohl dát mat.'; }
+  else if (fs.kind === 'fifty'){ text = 'Remíza!'; sub = '50 tahů bez braní a bez tahu pěšcem.'; }
   else {
     if (G.mode === 'online' && (G.role === 'connecting' || G.role === 'joining')) text = G.doc ? 'Připojuji tě do hry…' : 'Připojuji se ke hře…';
     else if (G.mode === 'online' && G.role === 'spectator') text = `Na tahu je ${colorName(s.turn)}`;
     else if (G.mode === 'online') text = s.turn === mine ? 'Jsi na tahu!' : 'Čeká se na tah soupeře…';
     else text = `Na tahu je ${colorName(s.turn)}`;
-    if (st === 'check') { text = 'Šach! ' + text; sub = 'Král je v ohrožení. Musíš ho zachránit.'; }
-    if (G.mode === 'online' && G.role === 'spectator') sub = 'Díváš se na hru. Hrát mohou jen dva hráči.';
+    if (fs.kind === 'check'){ text = 'Šach! ' + text; sub = 'Král je napadený. Hráč na tahu ho musí zachránit.'; }
+    if (G.mode === 'online' && G.role === 'spectator') sub = watchOnly ? 'Sledujete hru jako divák.' : 'Díváš se na hru. Hrát mohou jen dva hráči.';
   }
+  const offer = G.mode === 'online' && G.doc && !over ? G.doc.drawOffer : null;
+  const isPlayer = G.mode === 'online' && (G.role === 'host' || G.role === 'guest');
+  if (offer && isPlayer && offer === mine) sub = 'Nabídl jsi remízu. Čeká se, co odpoví soupeř.';
+  $('#offerBox').hidden = !(offer && isPlayer && offer !== mine);
   $('#status').textContent = text;
   $('#statusSub').textContent = sub; $('#statusSub').hidden = !sub;
   $('#netMsg').textContent = netMsg; $('#netMsg').hidden = !netMsg;
 
-  // hráči
-  const pl = $('#players'); pl.innerHTML = '';
-  for (const c of ['w', 'b']){
-    const row = document.createElement('div');
-    row.className = 'player' + (s.turn === c && st !== 'mate' && st !== 'stalemate' ? ' turn' : '');
-    const chip = document.createElement('span'); chip.className = 'chip';
-    chip.innerHTML = `<span class="pc sm ${c}" style="font-size:28px">${GLYPH.K}${VS}</span>`;
-    const name = document.createElement('span'); name.className = 'name'; name.textContent = playerName(c);
-    row.append(chip, name);
-    if (G.mode === 'online'){
-      if (c === mine){ const y = document.createElement('span'); y.className = 'you'; y.textContent = 'ty'; row.append(y); }
-      else {
-        const sid = G.doc ? (c === G.hostColor ? G.doc.hostId : G.doc.guestId) : null;
-        const online = seatOnline(sid);
-        const d = document.createElement('span'); d.className = online ? 'dot-on' : 'dot-off';
-        d.title = online ? 'Připojen' : 'Nepřipojen'; row.append(d);
-      }
-    }
-    pl.append(row);
-  }
-  const specEl = $('#spectators');
-  let spec = 0;
-  if (G.mode === 'online' && G.doc) for (const id of G.seen.keys()) if (id !== G.doc.hostId && id !== G.doc.guestId && id !== G.seat && seatOnline(id)) spec++;
-  specEl.hidden = !spec;
-  specEl.textContent = `Diváci: ${spec}`;
+  // tlačítka
+  const btn = (id, show, label, danger) => { const b = $(id); b.hidden = !show; b.textContent = label; b.classList.toggle('danger', !!danger); };
+  btn('#undoBtn', G.mode === 'local', 'Vrátit tah'); $('#undoBtn').disabled = !G.moves.length;
+  btn('#drawBtn', isPlayer && !over && G.moves.length >= 2, offer === mine ? 'Remíza nabídnuta' : 'Nabídnout remízu');
+  $('#drawBtn').disabled = !!offer;
+  btn('#resignBtn', isPlayer && !over && G.moves.length >= 1, confirmState.resign ? 'Opravdu vzdát? Klikni znovu' : 'Vzdát se', confirmState.resign);
+  btn('#newBtn', G.mode === 'local' || isPlayer, confirmState.newg ? 'Opravdu? Klikni znovu' : 'Nová hra', confirmState.newg);
+  $('#reactions').hidden = !isPlayer;
 
   // sdílení
   const showShare = G.mode === 'online' && G.role === 'host';
@@ -525,50 +763,91 @@ function render(){
     $('#shareLinkRow').hidden = !link;
     $('#localNote').hidden = !!link;
     $('#codeHint').hidden = !link;
-    $('#shareLink').value = link;
+    if ($('#shareLink').value !== link) $('#shareLink').value = link;
     $('#codeShow').textContent = G.code.toUpperCase();
   }
 
-  // tlačítka
-  const nb = $('#newBtn');
-  nb.hidden = G.mode === 'online' && G.role !== 'host' && G.role !== 'guest';
-  nb.textContent = newConfirm ? 'Opravdu? Klikni znovu' : 'Nová hra';
-  nb.className = 'small-btn' + (newConfirm ? ' danger' : '');
+  renderSettings(looks);
 
-  // tahy
-  const ml = $('#moves'); ml.innerHTML = '';
+  // seznam tahů
+  let mh = '';
   for (let n = 0; n < G.moves.length; n += 2){
-    ml.insertAdjacentHTML('beforeend', `<li class="n">${n/2 + 1}.</li>`);
+    mh += `<li class="n">${n/2 + 1}.</li>`;
     for (const j of [n, n+1]){
-      const li = document.createElement('li');
-      if (j < G.moves.length){
-        const m = G.moves[j], before = states[j].board, p = before[m.from], after = states[j+1];
-        const take = after.captured ? '×' : '–';
-        const castle = p[1] === 'K' && Math.abs(m.to - m.from) === 2 ? (m.to > m.from ? 'O-O' : 'O-O-O') : null;
-        const G2 = p[0] === 'w' ? OUTLINE : GLYPH;
-        li.innerHTML = `<span class="g">${G2[p[1]]}${VS}</span> ` +
-          (castle || sqName(m.from) + take + sqName(m.to) + (m.promo ? '=' + G2[m.promo] + VS : ''));
-      }
-      ml.appendChild(li);
+      if (j >= G.moves.length){ mh += '<li></li>'; continue; }
+      const m = G.moves[j], p = states[j].board[m.from], after = states[j+1];
+      const take = after.captured ? '×' : '–';
+      const castle = p[1] === 'K' && Math.abs(m.to - m.from) === 2 ? (m.to > m.from ? 'O-O' : 'O-O-O') : null;
+      const G2 = p[0] === 'w' ? OUTLINE : GLYPH;
+      mh += `<li><span class="g">${G2[p[1]]}${VS}</span> ${castle || sqName(m.from) + take + sqName(m.to) + (m.promo ? '=' + G2[m.promo] + VS : '')}</li>`;
     }
   }
-  ml.scrollTop = ml.scrollHeight;
+  const ml = $('#moves');
+  if (ml.innerHTML !== mh){ ml.innerHTML = mh; ml.scrollTop = ml.scrollHeight; }
   $('#movesEmpty').hidden = G.moves.length > 0;
 
-  const iWon = G.mode !== 'online' || !mine || opp(s.turn) === mine;
-  if (st === 'mate' && iWon && lastCelebrated !== G.gameId + ':' + G.moves.length){
-    lastCelebrated = G.gameId + ':' + G.moves.length;
-    confetti();
+  // zvuk a oslava – jen jednou pro každou novou pozici
+  const key = G.gameId + ':' + G.moves.length + ':' + fs.kind;
+  if (key !== lastSound){
+    const first = lastSound === '';
+    lastSound = key;
+    if (!first) playFor(fs);
   }
+  const iWon = G.mode !== 'online' || !mine || G.role === 'spectator' || fs.winner === mine;
+  if ((fs.kind === 'mate' || fs.kind === 'resign') && iWon && lastCelebrated !== key){ lastCelebrated = key; confetti(); }
+}
+function renderSettings(looks){
+  const rows = $('#lookRows');
+  let h = '';
+  if (G.mode === 'local'){
+    h += `<div class="set-row"><span class="flabel">Barva bílých figurek</span><div class="swatches" data-side="w">${swatchesHTML(localLook.w, localLook.b)}</div></div>`;
+    h += `<div class="set-row"><span class="flabel">Barva černých figurek</span><div class="swatches" data-side="b">${swatchesHTML(localLook.b, localLook.w)}</div></div>`;
+  } else if (G.role === 'host' || G.role === 'guest'){
+    const mine = myColor();
+    h += `<div class="set-row"><span class="flabel">Barva mých figurek</span><div class="swatches" data-side="me">${swatchesHTML(looks[mine], looks[opp(mine)])}</div></div>`;
+  }
+  if (rows.innerHTML !== h) rows.innerHTML = h;
+  const th = THEMES.map(([k, n]) => `<button class="theme" data-theme="${k}" aria-pressed="${k === theme}"><span class="mini">` +
+    [0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27].map(i => `<span style="background:${squareColor(i + 2, k)}"></span>`).join('') + `</span>${n}</button>`).join('');
+  if ($('#themes').innerHTML !== th) $('#themes').innerHTML = th;
+  $('#soundBtn').textContent = soundOn ? '🔊 Zvuky zapnuté' : '🔇 Zvuky vypnuté';
+  $('#soundBtn').setAttribute('aria-pressed', soundOn);
 }
 
-/* ---------- ovládání šachovnice ---------- */
+/* ---------- zvuky ---------- */
+let actx = null;
+function tone(freq, dur, type, vol, when){
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = actx.currentTime + (when || 0), o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol || .14, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + .02);
+  } catch(e){}
+}
+const SFX = {
+  move(){ tone(560, .08, 'triangle', .16); },
+  capture(){ tone(330, .1, 'square', .07); tone(220, .16, 'triangle', .14, .05); },
+  check(){ tone(660, .1, 'triangle'); tone(880, .16, 'triangle', .14, .1); },
+  win(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .28, 'triangle', .14, i * .12)); },
+  draw(){ tone(440, .18, 'sine'); tone(392, .25, 'sine', .14, .2); },
+  pop(){ tone(880, .07, 'sine', .1); tone(1320, .06, 'sine', .06, .05); }
+};
+function playFor(fs){
+  if (fs.kind === 'mate' || fs.kind === 'resign') SFX.win();
+  else if (isOver(fs.kind)) SFX.draw();
+  else if (fs.kind === 'check') SFX.check();
+  else if (G.moves.length && cur().captured) SFX.capture();
+  else if (G.moves.length) SFX.move();
+}
+
+/* ---------- ovládání ---------- */
 function canMoveNow(){
-  const s = cur(), st = gameStatus(s);
-  if (st !== 'play' && st !== 'check') return false;
+  if (isOver(fullStatus().kind)) return false;
   if (G.mode === 'local') return true;
-  if (G.role === 'spectator') return false;
-  return s.turn === myColor();
+  if (G.role !== 'host' && G.role !== 'guest') return false;
+  return cur().turn === myColor();
 }
 $('#board').addEventListener('click', e => {
   const el = e.target.closest('.sq'); if (!el) return;
@@ -586,20 +865,19 @@ $('#board').addEventListener('click', e => {
   render();
 });
 function showPromo(c){
-  const row = $('#promoRow'); row.innerHTML = '';
-  for (const t of 'QRBN'){
-    const b = document.createElement('button');
-    b.innerHTML = `<span class="pc sm ${c}" style="font-size:48px">${GLYPH[t]}${VS}</span>`;
-    b.setAttribute('aria-label', NAME_CZ[t]);
-    b.onclick = () => { const m = pendingPromo.find(x => x.promo === t); $('#promoOverlay').hidden = true; pendingPromo = null; makeMove(m); };
-    row.appendChild(b);
-  }
+  const looks = resolvedLooks();
+  $('#promoRow').innerHTML = 'QRBN'.split('').map(t => `<button data-promo="${t}" aria-label="${NAME_CZ[t]}">${pieceHTML(c + t, true, looks)}</button>`).join('');
   $('#promoOverlay').hidden = false;
 }
+$('#promoRow').addEventListener('click', e => {
+  const b = e.target.closest('[data-promo]'); if (!b || !pendingPromo) return;
+  const m = pendingPromo.find(x => x.promo === b.dataset.promo);
+  $('#promoOverlay').hidden = true; pendingPromo = null; makeMove(m);
+});
 $('#promoCancel').onclick = () => { $('#promoOverlay').hidden = true; pendingPromo = null; selected = -1; render(); };
 
 function makeMove(m){
-  newConfirm = false; selected = -1;
+  selected = -1; resetConfirms();
   if (G.mode === 'local'){
     states.push(applyMove(cur(), m));
     G.moves.push({ from: m.from, to: m.to, promo: m.promo || null });
@@ -607,29 +885,85 @@ function makeMove(m){
   }
   const d = cloneDoc(G.doc);
   d.moves.push(m.promo ? [m.from, m.to, m.promo] : [m.from, m.to]);
+  d.drawOffer = null;
   publishDoc(d);
 }
-
+function resetConfirms(){ for (const k in confirmState){ clearTimeout(confirmState[k]); delete confirmState[k]; } }
+function confirmed(key){
+  if (confirmState[key]){ clearTimeout(confirmState[key]); delete confirmState[key]; return true; }
+  resetConfirms();
+  confirmState[key] = setTimeout(() => { delete confirmState[key]; render(); }, 4000);
+  render(); return false;
+}
 $('#newBtn').onclick = () => {
-  if (G.moves.length && gameStatus(cur()) !== 'mate' && !newConfirm){ newConfirm = true; render(); setTimeout(() => { newConfirm = false; render(); }, 4000); return; }
-  newConfirm = false;
-  newGame();
+  if (G.moves.length && !isOver(fullStatus().kind) && !confirmed('newg')) return;
+  resetConfirms(); newGame();
 };
 function newGame(){
   selected = -1;
   if (G.mode === 'local'){ setMoves([]); saveLocal(); render(); return; }
   if (!G.doc) return;
   const d = cloneDoc(G.doc);
-  d.gameId++; d.moves = []; d.hostColor = opp(d.hostColor);   // v nové hře se barvy prohodí
+  d.gameId++; d.moves = []; d.end = null; d.drawOffer = null; d.hostColor = opp(d.hostColor);   // v nové hře se barvy prohodí
   publishDoc(d);
 }
+$('#undoBtn').onclick = () => { if (G.mode !== 'local' || !G.moves.length) return; setMoves(G.moves.slice(0, -1)); selected = -1; saveLocal(); lastSound = G.gameId + ':' + G.moves.length + ':' + fullStatus().kind; render(); };
+$('#resignBtn').onclick = () => {
+  if (!confirmed('resign')) return;
+  const d = cloneDoc(G.doc); d.end = { reason: 'resign', winner: opp(myColor()), by: myName }; d.drawOffer = null; publishDoc(d);
+};
+$('#drawBtn').onclick = () => { const d = cloneDoc(G.doc); d.drawOffer = myColor(); publishDoc(d); };
+$('#acceptDraw').onclick = () => { const d = cloneDoc(G.doc); d.end = { reason: 'draw' }; d.drawOffer = null; publishDoc(d); };
+$('#declineDraw').onclick = () => { const d = cloneDoc(G.doc); d.drawOffer = null; publishDoc(d); };
 $('#flipBtn').onclick = () => { flipped = !flipped; render(); };
+$('#soundBtn').onclick = () => { soundOn = !soundOn; LS.set('ds-sound', soundOn); if (soundOn) SFX.pop(); render(); };
+$('#themes').addEventListener('click', e => {
+  const b = e.target.closest('[data-theme]'); if (!b) return;
+  theme = b.dataset.theme; LS.set('ds-theme', theme); render();
+});
+$('#lookRows').addEventListener('click', e => {
+  const b = e.target.closest('[data-look]'); if (!b || b.disabled) return;
+  const side = b.closest('.swatches').dataset.side, k = b.dataset.look;
+  if (side === 'me'){ setMyLook(k); maybeUpdateSeat(); }
+  else { localLook[side] = k; LS.set('ds-local-look', localLook); }
+  render();
+});
+function setMyLook(k){ myLook = k; LS.set('ds-look', k); renderMenuLooks(); }
+for (const id of ['#menuSwatches', '#nameSwatches']) $(id).addEventListener('click', e => {
+  const b = e.target.closest('[data-look]'); if (!b) return; setMyLook(b.dataset.look);
+});
 function saveLocal(){ LS.set('ds-local', { moves: G.moves }); }
 
+/* ---------- smajlíky ---------- */
+$('#reactions').insertAdjacentHTML('beforeend', EMOJI.map(e => `<button data-emoji="${e}" aria-label="Poslat ${e}">${e}</button>`).join(''));
+$('#reactions').addEventListener('click', e => {
+  const b = e.target.closest('[data-emoji]'); if (!b) return;
+  if (Date.now() - net.lastReact < 1200) return;
+  net.lastReact = Date.now();
+  const id = rand(8); net.reactIds.add(id);
+  const payload = JSON.stringify({ seat: G.seat, e: b.dataset.emoji, id });
+  for (const c of net.clients) if (c.connected) c.publish(base() + '/react', payload, { qos: 0 });
+  showReaction(myColor(), b.dataset.emoji); SFX.pop();
+});
+function onReact(d){
+  if (!d || !EMOJI.includes(d.e) || typeof d.id !== 'string' || net.reactIds.has(d.id) || d.seat === G.seat || !G.doc) return;
+  net.reactIds.add(d.id);
+  const side = d.seat === G.doc.hostId ? G.hostColor : d.seat === G.doc.guestId ? opp(G.hostColor) : null;
+  if (!side) return;
+  showReaction(side, d.e); SFX.pop();
+}
+function showReaction(side, e){
+  const bar = [$('#barTop'), $('#barBottom')].find(b => b.dataset.side === side); if (!bar) return;
+  const span = document.createElement('span'); span.className = 'float-emoji'; span.textContent = e;
+  // lišta se překresluje, proto emoji dáme do sloupce se šachovnicí
+  const col = $('.board-col'), r = bar.getBoundingClientRect(), cr = col.getBoundingClientRect();
+  span.style.top = (r.top - cr.top - 14) + 'px'; col.style.position = 'relative';
+  col.appendChild(span); setTimeout(() => span.remove(), 2500);
+}
+
 /* ---------- síť: sdílený stav hry přes veřejné MQTT servery ----------
-   Celá hra je jeden dokument (tahy, kdo hraje, jména). Kdo něco změní, zvýší
-   číslo verze "rev" a pošle celý dokument; server ho drží i pro později
-   příchozí. Každý přijme dokument s vyšší verzí, pokud jsou tahy platné. */
+   Celá hra je jeden dokument. Kdo něco změní, zvýší číslo verze "rev" a pošle celý
+   dokument; server ho drží i pro později příchozí. Každý přijme vyšší verzi s platnými tahy. */
 function shareLink(){
   if (!/^https?:$/.test(location.protocol)) return '';
   return location.origin + location.pathname + '?hra=' + G.code.toUpperCase();
@@ -642,12 +976,17 @@ function cleanDoc(d){
   if (!Number.isInteger(d.rev) || !Number.isInteger(d.gameId) || !Array.isArray(d.moves) || d.moves.length > 700) return null;
   if (typeof d.hostId !== 'string') return null;
   const str = (x, n) => typeof x === 'string' ? x.slice(0, n) : '';
+  const lk = x => LOOK_KEYS.includes(x) ? x : null;
+  const side = x => x === 'w' || x === 'b' ? x : null;
   return {
-    v: 2, rev: d.rev, gameId: d.gameId, by: str(d.by, 40),
+    v: 2, rev: d.rev, gameId: d.gameId, by: str(d.by, 40), created: Number.isFinite(d.created) ? d.created : 0,
     moves: d.moves.filter(m => Array.isArray(m)).map(m => m[2] ? [m[0] | 0, m[1] | 0, str(m[2], 1)] : [m[0] | 0, m[1] | 0]),
     hostId: str(d.hostId, 40), guestId: d.guestId ? str(d.guestId, 40) : null,
     hostColor: d.hostColor === 'b' ? 'b' : 'w',
-    names: { host: str(d.names && d.names.host, 20), guest: str(d.names && d.names.guest, 20) }
+    names: { host: str(d.names && d.names.host, 20), guest: str(d.names && d.names.guest, 20) },
+    look: { host: lk(d.look && d.look.host), guest: lk(d.look && d.look.guest) },
+    end: d.end && typeof d.end === 'object' ? { reason: d.end.reason === 'resign' ? 'resign' : 'draw', winner: side(d.end.winner), by: str(d.end.by, 20) } : null,
+    drawOffer: side(d.drawOffer)
   };
 }
 function computeRole(){
@@ -655,60 +994,78 @@ function computeRole(){
   if (!d) return 'connecting';
   if (d.hostId === G.seat) return 'host';
   if (d.guestId === G.seat) return 'guest';
-  return d.guestId ? 'spectator' : 'joining';
+  return d.guestId || watchOnly ? 'spectator' : 'joining';
 }
 function adoptDoc(d){
   const prevLen = G.moves.length, prevGame = G.gameId;
   if (!setMoves(docMoves(d))) return false;
   G.doc = d; G.gameId = d.gameId; G.hostColor = d.hostColor; G.names = d.names;
   G.role = computeRole();
-  if (prevLen !== G.moves.length || prevGame !== G.gameId){ selected = -1; $('#promoOverlay').hidden = true; pendingPromo = null; }
+  if (prevLen !== G.moves.length || prevGame !== G.gameId){ selected = -1; $('#promoOverlay').hidden = true; pendingPromo = null; resetConfirms(); }
   LS.set('ds-doc-' + G.code, d);
+  scheduleSummary();
   return true;
 }
 function publishDoc(d){
   d.rev = (G.doc ? G.doc.rev : 0) + 1; d.by = G.seat;
   if (!adoptDoc(d)) return;
-  sendDoc();
-  render();
-  maybeUpdateSeat();
+  sendDoc(); render(); maybeUpdateSeat();
 }
 function sendDoc(only){
   if (!G.doc) return;
   const payload = JSON.stringify(G.doc);
   for (const c of (only ? [only] : net.clients)) if (c.connected) c.publish(base() + '/state', payload, { qos: 1, retain: true });
 }
-function scheduleRepublish(){
-  clearTimeout(net.republish);
-  net.republish = setTimeout(() => sendDoc(), 700);
-}
+function scheduleRepublish(){ clearTimeout(net.republish); net.republish = setTimeout(() => sendDoc(), 700); }
 function onState(raw){
   const d = cleanDoc(raw); if (!d) return;
   const mine = G.doc;
   const newer = !mine || d.rev > mine.rev || (d.rev === mine.rev && d.by !== mine.by && d.by < mine.by);
-  if (newer){
-    if (adoptDoc(d)){ updateNet(); render(); maybeUpdateSeat(); }
-  } else if (d.rev < mine.rev){
-    scheduleRepublish();   // někde zůstala stará verze, pošleme novější
-  }
+  if (newer){ if (adoptDoc(d)){ updateNet(); render(); maybeUpdateSeat(); } }
+  else if (d.rev < mine.rev) scheduleRepublish();   // někde zůstala stará verze
 }
 function maybeUpdateSeat(){
   const d = G.doc;
-  if (!d || !G.settled) return;
-  if (!d.guestId && d.hostId !== G.seat){
-    const n = cloneDoc(d); n.guestId = G.seat; n.names.guest = myName; publishDoc(n); return;
+  if (!d || !G.settled || watchOnly) return;
+  const n = cloneDoc(d); let changed = false;
+  if (!d.guestId && d.hostId !== G.seat){ n.guestId = G.seat; n.names.guest = myName; n.look.guest = myLook; changed = true; }
+  else {
+    const key = G.role === 'host' ? 'host' : G.role === 'guest' ? 'guest' : null;
+    if (key){
+      if (myName && d.names[key] !== myName){ n.names[key] = myName; changed = true; }
+      if ((d.look[key] || null) !== (myLook || null)){ n.look[key] = myLook; changed = true; }
+    }
   }
-  if (myName && G.role === 'host' && d.names.host !== myName){ const n = cloneDoc(d); n.names.host = myName; publishDoc(n); return; }
-  if (myName && G.role === 'guest' && d.names.guest !== myName){ const n = cloneDoc(d); n.names.guest = myName; publishDoc(n); }
+  if (changed) publishDoc(n);
+}
+// přehled pro učitele: shrnutí každé hry a kdo je právě připojen
+function scheduleSummary(){
+  if (watchOnly || !(G.role === 'host' || G.role === 'guest')) return;
+  clearTimeout(net.summary);
+  net.summary = setTimeout(sendSummary, 1200);
+}
+function sendSummary(only){
+  const d = G.doc; if (!d || watchOnly || !(G.role === 'host' || G.role === 'guest')) return;
+  const fs = fullStatus(), hc = d.hostColor;
+  const sum = { v: 2, code: G.code, created: d.created, updated: Date.now(), moves: d.moves.length, gameId: d.gameId,
+    white: hc === 'w' ? d.names.host : d.names.guest, black: hc === 'w' ? d.names.guest : d.names.host,
+    wSeat: hc === 'w' ? d.hostId : d.guestId, bSeat: hc === 'w' ? d.guestId : d.hostId,
+    kind: fs.kind, winner: fs.winner || null };
+  const payload = JSON.stringify(sum);
+  for (const c of (only ? [only] : net.clients)) if (c.connected) c.publish(TOPIC + 'sum/' + G.code, payload, { qos: 1, retain: true });
 }
 function sendHb(only){
   const hb = JSON.stringify({ seat: G.seat, tab: tabId, since: tabSince, rev: G.doc ? G.doc.rev : 0 });
-  for (const c of (only ? [only] : net.clients)) if (c.connected) c.publish(base() + '/hb', hb, { qos: 0 });
+  const live = JSON.stringify({ seat: G.seat, code: G.code, name: myName, role: G.role });
+  for (const c of (only ? [only] : net.clients)) if (c.connected){
+    c.publish(base() + '/hb', hb, { qos: 0 });
+    if (!watchOnly) c.publish(TOPIC + 'live', live, { qos: 0 });
+  }
 }
 function onHb(d){
   if (!d || typeof d.seat !== 'string' || d.tab === tabId) return;
   G.seen.set(d.seat.slice(0, 40), Date.now());
-  // Stejná hra otevřená ve dvou oknech jednoho prohlížeče: mladší okno si vezme novou identitu.
+  // Stejná hra ve dvou oknech jednoho prohlížeče: mladší okno si vezme novou identitu.
   if (d.seat === G.seat && typeof d.since === 'number' && d.since < tabSince){
     G.seat = rand(12); SS.set('ds-seat-' + G.code, G.seat);
     G.role = computeRole(); sendHb(); maybeUpdateSeat();
@@ -716,28 +1073,38 @@ function onHb(d){
   if (G.doc && typeof d.rev === 'number' && d.rev < G.doc.rev && (G.role === 'host' || G.role === 'guest')) scheduleRepublish();
   render();
 }
-function connectedCount(){ return net.clients.filter(c => c.connected).length; }
+function connectedCount(clients){ return (clients || net.clients).filter(c => c.connected).length; }
+function connectBrokers(topics, onMessage, onChange){
+  const list = [];
+  for (const b of BROKERS){
+    let c;
+    try {
+      c = mqtt.connect(b.url, { clientId: 'ds_' + rand(12), username: b.username, password: b.password,
+        clean: true, connectTimeout: 10000, reconnectPeriod: 5000, keepalive: 30 });
+    } catch(e){ continue; }
+    list.push(c);
+    c.on('connect', () => { c.subscribe(topics, { qos: 1 }); onChange(c); });
+    c.on('message', (topic, payload) => { let d; try { d = JSON.parse(payload.toString()); } catch(e){ return; } onMessage(topic, d); });
+    c.on('close', () => onChange(null));
+    c.on('error', () => {});
+  }
+  return list;
+}
+function connText(n, started){
+  return n ? `Připojeno k serveru hry (${n} z ${BROKERS.length})` : (Date.now() - started > 12000 ? 'Bez spojení se serverem' : 'Připojuji se k serveru hry…');
+}
 function updateNet(){
   const n = connectedCount(), code = G.code.toUpperCase();
   if (!ONLINE_OK) netMsg = 'Hra přes internet nejde: nepodařilo se načíst potřebnou knihovnu. Zkontrolujte připojení k internetu.';
   else if (n === 0) netMsg = Date.now() - G.started > 12000
-    ? 'Nedaří se spojit se serverem hry. Zkontrolujte internet. Ve škole může síť herní servery blokovat – zkuste to na mobilních datech. Zkouším to dál…'
-    : '';
+    ? 'Nedaří se spojit se serverem hry. Zkontrolujte internet. Ve škole může síť herní servery blokovat – zkuste to na mobilních datech. Zkouším to dál…' : '';
   else if (!G.doc) netMsg = G.settled ? `Hru s kódem ${code} jsem nenašel. Zkontroluj kód. Pokud je správně, ať kamarád hru otevře znovu.` : '';
   else netMsg = '';
   const ci = $('#conn');
-  if (G.mode === 'online'){
-    ci.hidden = false;
-    ci.className = 'conn ' + (n ? 'ok' : 'wait');
-    ci.textContent = n ? `Připojeno k serveru hry (${n} z ${BROKERS.length})` : (Date.now() - G.started > 12000 ? 'Bez spojení se serverem' : 'Připojuji se k serveru hry…');
-    if (!G.doc && n) ci.textContent = G.settled ? 'Připojeno, hra nenalezena' : `Hledám hru ${code}…`;
-  }
+  ci.hidden = false; ci.className = 'conn ' + (n ? 'ok' : 'wait');
+  ci.textContent = !G.doc && n ? (G.settled ? 'Připojeno, hra nenalezena' : `Hledám hru ${code}…`) : connText(n, G.started);
 }
-function settle(){
-  if (G.settled) return;
-  G.settled = true;
-  updateNet(); render(); maybeUpdateSeat();
-}
+function settle(){ if (G.settled) return; G.settled = true; updateNet(); render(); maybeUpdateSeat(); }
 function startOnline(code, create){
   G.mode = 'online'; G.code = code; G.started = Date.now();
   G.seat = SS.get('ds-seat-' + code, null) || LS.get('ds-seat-' + code, null) || rand(12);
@@ -745,39 +1112,114 @@ function startOnline(code, create){
   if (!LS.get('ds-seat-' + code, null)) LS.set('ds-seat-' + code, G.seat);
   if (create){
     G.settled = true;
-    publishDoc({ v: 2, rev: 0, gameId: 1, moves: [], hostId: G.seat, guestId: null, hostColor: 'w', names: { host: myName, guest: '' } });
+    G.role = 'host';
+    publishDoc({ v: 2, rev: 0, gameId: 1, created: Date.now(), moves: [], hostId: G.seat, guestId: null, hostColor: 'w',
+                 names: { host: myName, guest: '' }, look: { host: myLook, guest: null }, end: null, drawOffer: null });
   } else {
     const bak = cleanDoc(LS.get('ds-doc-' + code, null));
     if (bak) adoptDoc(bak);
   }
   G.role = computeRole();
-  showGame();
-  updateNet(); render();
+  showGame(); updateNet(); render();
   if (!ONLINE_OK) return;
-  for (const b of BROKERS){
-    let c;
-    try {
-      c = mqtt.connect(b.url, { clientId: 'ds_' + rand(12), username: b.username, password: b.password,
-        clean: true, connectTimeout: 10000, reconnectPeriod: 5000, keepalive: 30 });
-    } catch(e){ continue; }
-    net.clients.push(c);
-    c.on('connect', () => {
-      c.subscribe([base() + '/state', base() + '/hb'], { qos: 1 });
+  net.clients = connectBrokers([base() + '/state', base() + '/hb', base() + '/react'], (topic, d) => {
+    if (topic.endsWith('/state')) onState(d);
+    else if (topic.endsWith('/hb')) onHb(d);
+    else if (topic.endsWith('/react')) onReact(d);
+  }, c => {
+    if (c){
       sendHb(c);
-      if (G.doc && (G.role === 'host' || G.role === 'guest')) sendDoc(c);
+      if (G.doc && (G.role === 'host' || G.role === 'guest')){ sendDoc(c); sendSummary(c); }
       if (!G.settled) setTimeout(settle, 3000);
-      updateNet(); render();
-    });
-    c.on('message', (topic, payload) => {
-      let d; try { d = JSON.parse(payload.toString()); } catch(e){ return; }
-      if (topic.endsWith('/state')) onState(d);
-      else if (topic.endsWith('/hb')) onHb(d);
-    });
-    c.on('close', () => { updateNet(); render(); });
-    c.on('error', () => {});
-  }
-  net.hbTimer = setInterval(() => { sendHb(); updateNet(); render(); }, 4000);
+    }
+    updateNet(); render();
+  });
+  net.timer = setInterval(() => { sendHb(); updateNet(); render(); }, 4000);
 }
+
+/* ---------- panel pro učitele ---------- */
+const T = { clients: [], sums: new Map(), live: new Map(), timer: null, started: 0 };
+async function sha256(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+function openTeacher(){
+  $('#teacherOverlay').hidden = false;
+  if (SS.get('ds-teacher', false)) unlockTeacher();
+  else { $('#pwForm').hidden = false; $('#teacherData').hidden = true; setTimeout(() => $('#pwInput').focus(), 50); }
+}
+$('#teacherBtn').onclick = openTeacher;
+$('#pwForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  let ok = false;
+  try { ok = (await sha256($('#pwInput').value.trim())) === TEACHER_HASH; } catch(err){ ok = false; }
+  $('#pwErr').hidden = ok;
+  if (ok){ SS.set('ds-teacher', true); $('#pwInput').value = ''; unlockTeacher(); }
+});
+$('#tLogout').onclick = () => { SS.del('ds-teacher'); $('#teacherOverlay').hidden = true; stopTeacher(); };
+function unlockTeacher(){
+  $('#pwForm').hidden = true; $('#teacherData').hidden = false;
+  if (!T.clients.length && ONLINE_OK){
+    T.started = Date.now();
+    T.clients = connectBrokers([TOPIC + 'sum/+', TOPIC + 'live'], (topic, d) => {
+      if (!d || typeof d !== 'object') return;
+      if (topic === TOPIC + 'live'){
+        if (typeof d.seat === 'string' && typeof d.code === 'string') T.live.set(d.seat.slice(0, 40), { code: String(d.code).slice(0, 5), name: String(d.name || '').slice(0, 20), role: String(d.role || ''), t: Date.now() });
+      } else if (typeof d.code === 'string' && Number.isFinite(d.updated)){
+        const old = T.sums.get(d.code);
+        if (!old || d.updated >= old.updated) T.sums.set(d.code, d);
+      }
+      renderTeacher();
+    }, () => renderTeacher());
+  }
+  clearInterval(T.timer); T.timer = setInterval(renderTeacher, 3000);
+  renderTeacher();
+}
+function stopTeacher(){ clearInterval(T.timer); for (const c of T.clients) try { c.end(true); } catch(e){} T.clients = []; }
+function ago(t){
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'právě teď';
+  const m = Math.round(s / 60); if (m < 60) return `před ${m} min`;
+  const h = Math.round(m / 60); return `před ${h} h`;
+}
+function renderTeacher(){
+  if ($('#teacherOverlay').hidden) return;
+  const now = Date.now(), fresh = [...T.live.values()].filter(x => x.t > now - 20000);
+  const liveSeat = id => { for (const [seat, x] of T.live) if (seat === id && x.t > now - 20000) return true; return false; };
+  const sums = [...T.sums.values()].filter(s => s.updated > now - 24 * 3600 * 1000).sort((a, b) => b.updated - a.updated);
+  const active = sums.filter(s => !isOver(s.kind) && (liveSeat(s.wSeat) || liveSeat(s.bSeat)));
+  $('#tOnline').textContent = fresh.filter(x => x.role === 'host' || x.role === 'guest').length;
+  $('#tActive').textContent = active.length;
+  $('#tToday').textContent = sums.length;
+  const n = connectedCount(T.clients);
+  $('#tConn').className = 'conn ' + (n ? 'ok' : '');
+  $('#tConn').textContent = connText(n, T.started);
+  const person = (name, seat) => `<span style="display:inline-flex;align-items:center;gap:6px"><span class="${liveSeat(seat) ? 'dot-on' : 'dot-off'}"></span>${esc(name || (seat ? 'bez jména' : '—'))}</span>`;
+  const watchUrl = code => (/^https?:$/.test(location.protocol) ? location.origin + location.pathname : location.href.split('?')[0]) + '?hra=' + code.toUpperCase() + '&divak=1';
+  $('#tBody').innerHTML = sums.map(s => `<tr>
+    <td class="codecell">${esc(s.code.toUpperCase())}</td>
+    <td>${person(s.white, s.wSeat)}</td><td>${person(s.black, s.bSeat)}</td>
+    <td class="num">${Number(s.moves) | 0}</td>
+    <td><span class="tag ${isOver(s.kind) ? 'done' : 'play'}">${esc(statusLabel({ kind: s.kind, winner: s.winner }))}</span></td>
+    <td>${ago(s.updated)}</td>
+    <td><a class="btn" style="text-decoration:none;display:inline-block;color:var(--accent)" href="${esc(watchUrl(s.code))}" target="_blank" rel="noopener">Sledovat</a></td></tr>`).join('');
+  $('#tEmpty').hidden = sums.length > 0;
+}
+
+/* ---------- nápověda ---------- */
+const HELP = [
+  ['K', 'Král', 'Jde o jedno pole libovolným směrem. Nesmí vstoupit na napadené pole. Když je v šachu, musíš ho zachránit.', 'nejdůležitější'],
+  ['Q', 'Dáma', 'Nejsilnější figurka. Jede rovně i šikmo o kolik polí chce, ale nesmí přeskakovat.', '9 bodů'],
+  ['R', 'Věž', 'Jede rovně dopředu, dozadu a do stran o kolik polí chce.', '5 bodů'],
+  ['B', 'Střelec', 'Jede jen šikmo, takže zůstává pořád na polích stejné barvy.', '3 body'],
+  ['N', 'Jezdec', 'Skáče do tvaru písmene L: dvě pole jedním směrem a jedno do strany. Jako jediný umí přeskakovat.', '3 body'],
+  ['P', 'Pěšec', 'Jde jen dopředu o jedno pole, z první řady smí o dvě. Bere šikmo. Když dojde na konec šachovnice, promění se třeba v dámu.', '1 bod']
+];
+$('#helpList').innerHTML = HELP.map(([t, n, d, v]) => `<li>${pieceHTML('w' + t, true, { w: myLook || 'bila', b: 'cerna' })}<div><b>${n}</b><span class="val">${v}</span><p>${d}</p></div></li>`).join('') +
+  `<li><span class="pc sm lk-bila" style="font-size:30px;letter-spacing:-.1em">♚︎♜︎</span><div><b>Rošáda</b><p>Král a věž se pohnou najednou: král jde o dvě pole k věži a věž ho přeskočí. Jde to, jen když se oba ještě nehnuli a mezi nimi nic není.</p></div></li>`;
+$$('[data-help]').forEach(b => b.onclick = () => { $('#helpOverlay').hidden = false; });
+$$('[data-close]').forEach(b => b.onclick = () => { b.closest('.overlay').hidden = true; if (b.closest('#teacherOverlay')) clearInterval(T.timer); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['#helpOverlay', '#teacherOverlay']) $(id).hidden = true; });
 
 /* ---------- obrazovky ---------- */
 function showGame(){
@@ -792,23 +1234,26 @@ $('#homeBtn').onclick = goMenu;
 
 const nameInput = $('#nameInput');
 nameInput.value = myName;
-nameInput.addEventListener('input', () => { myName = nameInput.value.trim().slice(0, 20); LS.set('ds-name', myName); });
-
+function setName(v){ myName = v.trim().slice(0, 20); LS.set('ds-name', myName); }
+nameInput.addEventListener('input', () => { setName(nameInput.value); if (myName) $('#nameErr').hidden = true; });
+function needName(){
+  if (myName) return false;
+  $('#nameErr').hidden = false; nameInput.focus(); return true;
+}
 function setUrlCode(code){ try { history.replaceState(null, '', location.pathname + '?hra=' + code.toUpperCase()); } catch(e){} }
-$('#hostBtn').onclick = () => { const code = rand(5); setUrlCode(code); startOnline(code, true); };
+$('#hostBtn').onclick = () => { if (needName()) return; const code = rand(5); setUrlCode(code); startOnline(code, true); };
 $('#joinBtn').onclick = () => {
+  if (needName()) return;
   const code = $('#codeInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   const err = $('#joinErr');
-  if (code.length !== 5){ err.textContent = 'Kód má 5 znaků. Zkontroluj ho.'; err.hidden = false; return; }
-  err.hidden = true; setUrlCode(code);
-  startOnline(code, false);
+  if (code.length !== 5){ err.textContent = 'Kód hry má 5 znaků. Zkontroluj ho.'; err.hidden = false; return; }
+  err.hidden = true; setUrlCode(code); startOnline(code, false);
 };
 $('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#joinBtn').click(); });
 $('#localBtn').onclick = () => {
   G.mode = 'local';
   const saved = LS.get('ds-local', null);
-  if (saved && saved.moves && saved.moves.length && gameStatus((setMoves(saved.moves), cur())) !== 'mate'){ /* pokračujeme v rozehrané hře */ }
-  else setMoves([]);
+  if (!(saved && Array.isArray(saved.moves) && saved.moves.length && setMoves(saved.moves) && !isOver(gameStatus(cur())))) setMoves([]);
   showGame();
 };
 $('#copyBtn').onclick = () => {
@@ -817,10 +1262,9 @@ $('#copyBtn').onclick = () => {
   const fallback = () => { inp.focus(); inp.select(); try { document.execCommand('copy'); done(); } catch(e){} };
   if (navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done, fallback); else fallback();
 };
-
 if (!ONLINE_OK){ $('#noNet').hidden = false; $('#hostBtn').disabled = true; $('#joinBtn').disabled = true; }
 
-// duhový nápis
+// duhový nápis v barvách loga
 (() => {
   const el = $('#logoText'), cols = ['#ef321f','#ef7312','#f0a800','#5fb423','#2d72c0','#8b369e'];
   let k = 0; el.innerHTML = [...el.textContent].map(ch => ch === ' ' ? ' ' : `<span style="color:${cols[k++ % cols.length]}">${ch}</span>`).join('');
@@ -831,7 +1275,7 @@ function confetti(){
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const cv = $('#confetti'), ctx = cv.getContext('2d');
   cv.hidden = false; cv.width = innerWidth; cv.height = innerHeight;
-  const cols = ['#ff4d4d','#ff9a3c','#ffd93c','#4cd964','#3cb4ff','#5a6bff','#b05cff'];
+  const cols = ['#ef321f','#ef7312','#fabd0b','#73c82c','#2d72c0','#8b369e'];
   const parts = Array.from({ length: 160 }, () => ({
     x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .5,
     vx: (Math.random() - .5) * 3, vy: 2 + Math.random() * 4, r: 4 + Math.random() * 6,
@@ -841,14 +1285,24 @@ function confetti(){
   (function frame(t){
     ctx.clearRect(0, 0, cv.width, cv.height);
     for (const p of parts){ p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r/2, -p.r/4, p.r, p.r/2); ctx.restore(); }
-    if (t - t0 < 4000) requestAnimationFrame(frame); else { cv.hidden = true; }
+    if (t - t0 < 4000) requestAnimationFrame(frame); else cv.hidden = true;
   })(t0);
 }
 
 /* ---------- start ---------- */
+renderMenuLooks();
 (() => {
-  const code = (new URLSearchParams(location.search).get('hra') || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (code.length === 5) startOnline(code, false);
+  const code = (params.get('hra') || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (code.length !== 5) return;
+  if (myName || watchOnly){ startOnline(code, false); return; }
+  // otevřený odkaz bez jména: nejdřív se zeptáme
+  $('#nameOverlay').hidden = false; $('#nameInput2').focus();
+  $('#nameForm').addEventListener('submit', e => {
+    e.preventDefault();
+    if (!$('#nameInput2').value.trim()){ $('#nameInput2').focus(); return; }
+    setName($('#nameInput2').value); nameInput.value = myName;
+    $('#nameOverlay').hidden = true; startOnline(code, false);
+  });
 })();
 </script>
 </body>
